@@ -1,0 +1,27 @@
+{
+  "program": "multisig_wallet.aleo",
+  "version": "0.1.0",
+  "description": "",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "multisig_core.aleo",
+      "location": "local",
+      "path": "../multisig_core",
+      "edition": null
+    },
+    {
+      "name": "credits.aleo",
+      "location": "network",
+      "path": null,
+      "edition": null
+    },
+    {
+      "name": "token_registry.aleo",
+      "location": "local",
+      "path": "../../../token_registry",
+      "edition": null
+    }
+  ],
+  "dev_dependencies": null
+}

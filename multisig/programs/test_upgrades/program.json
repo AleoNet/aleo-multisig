@@ -1,0 +1,15 @@
+{
+  "program": "test_upgrades.aleo",
+  "version": "0.1.0",
+  "description": "",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "multisig_core.aleo",
+      "location": "local",
+      "path": "../multisig_core",
+      "edition": null
+    }
+  ],
+  "dev_dependencies": null
+}
