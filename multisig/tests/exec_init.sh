@@ -1,9 +1,4 @@
-# Init the multisig contract with 2 signers:
-# - APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH
-# - APrivateKey1zkp2RWGDcde3efb89rjhME1VYA8QMxcxep5DShNBR6n8Yjh
-
 set -ex
-
 
 GUARD_CREATE_WALLET="false"
 
@@ -17,7 +12,8 @@ do
     esac
 done
 
-$LEO execute --skip-execute-proof --broadcast --yes multisig_core.aleo/init $GUARD_CREATE_WALLET
+# Upgrader private key is: APrivateKey1zkp2RWGDcde3efb89rjhME1VYA8QMxcxep5DShNBR6n8Yjh
+$LEO execute --skip-execute-proof --broadcast --yes multisig_core.aleo/init aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t $GUARD_CREATE_WALLET
 
 if [ "$GUARD_CREATE_WALLET" = "true" ]; then
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"

@@ -106,13 +106,62 @@ describe('Multisig Guard Create Wallet Tests', () => {
         console.log('Wallet created successfully!');
     });
 
+    test('Cannot call set_upgrader_address from non-upgrader address', async () => {
+        // accounts[0] is not the upgrader (upgrader is accounts[1])
+        try {
+            await AleoUtils.transact(
+                AleoUtils.accounts[0],
+                "multisig_core.aleo",
+                "set_upgrader_address",
+                [AleoUtils.addresses[2]]
+            );
+            fail('Expected set_upgrader_address to fail when called from non-upgrader address');
+        } catch (error) {
+            expect(error.message).toContain('Transaction failed');
+        }
+    });
+
+    test('Can change upgrader_address from valid upgrader', async () => {
+        // Get initial settings to confirm upgrader is addresses[1]
+        let settings = await MultiSig.getProgramSettings();
+        expect(settings.upgrader_address).toBe(AleoUtils.addresses[1]);
+
+        // Change upgrader to addresses[2]
+        console.log('Changing upgrader_address to addresses[2]...');
+        await AleoUtils.transact(
+            AleoUtils.accounts[1],
+            "multisig_core.aleo",
+            "set_upgrader_address",
+            [AleoUtils.addresses[2]]
+        );
+
+        // Verify the change
+        settings = await MultiSig.getProgramSettings();
+        expect(settings.upgrader_address).toBe(AleoUtils.addresses[2]);
+        console.log('Upgrader address changed to:', settings.upgrader_address);
+
+        // Change it back to addresses[1]
+        console.log('Changing upgrader_address back to addresses[1]...');
+        await AleoUtils.transact(
+            AleoUtils.accounts[2],
+            "multisig_core.aleo",
+            "set_upgrader_address",
+            [AleoUtils.addresses[1]]
+        );
+
+        // Verify the change back
+        settings = await MultiSig.getProgramSettings();
+        expect(settings.upgrader_address).toBe(AleoUtils.addresses[1]);
+        console.log('Upgrader address restored to:', settings.upgrader_address);
+    });
+
     test('Cannot initialize multisig_core twice', async () => {
         try {
             await AleoUtils.transact(
                 AleoUtils.accounts[0],
                 "multisig_core.aleo",
                 "init",
-                ["true"]
+                [AleoUtils.addresses[0], "true"]
             );
             fail('Expected re-initialization with true to fail');
         } catch (error) {
@@ -124,7 +173,7 @@ describe('Multisig Guard Create Wallet Tests', () => {
                 AleoUtils.accounts[0],
                 "multisig_core.aleo",
                 "init",
-                ["false"]
+                [AleoUtils.addresses[0], "false"]
             );
             fail('Expected re-initialization with false to fail');
         } catch (error) {

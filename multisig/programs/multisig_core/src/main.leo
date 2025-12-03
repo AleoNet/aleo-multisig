@@ -12,13 +12,6 @@ program multisig_core.aleo {
     // IMPORTANT! Remember to change this before deployment!
     const DEPLOYER_ADDRESS: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
 
-    // The upgrader, who is allowed to perform upgrades on the program as well as halt any future
-    // upgrades (by calling the `disallow_upgrades` transition).
-    //
-    // This address belongs to the second standard Aleo test account.
-    // IMPORTANT! Remember to change this before deployment!
-    const UPGRADER_ADDRESS: address = aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t;
-
     const ALEO_ZERO_ADDRESS: address = aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc;
     const ETH_ZERO_ADDRESS: [u8; 20] = [0u8; 20];
     const MAX_BLOCK_HEIGHT: u32 = 4294967295;  // 2**32 - 1
@@ -28,12 +21,12 @@ program multisig_core.aleo {
         if (self.edition == 0u16) {
             assert_eq(self.program_owner, DEPLOYER_ADDRESS);
         } else {
-            assert_eq(self.program_owner, UPGRADER_ADDRESS);
 
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
 
             assert(program_settings.allow_upgrades);
+            assert_eq(self.program_owner, program_settings.upgrader_address);
         }
     }
 
@@ -45,6 +38,11 @@ program multisig_core.aleo {
         // Whether upgrades are allowed. This serves as an upgrade kill switch, preventing
         // further program upgrades once it is set to false.
         allow_upgrades: bool,
+
+        // The address that is allowed to perform upgrades, as long as allow_upgrades = true.
+        // This is also the address that is allowed to turn off upgrades via the `disallow_upgrades`
+        // transition.
+        upgrader_address: address,
 
         // Whether we require a successful multisig operation to create a wallet.
         // If we do, the initiator must first create a wallet (by calling create_wallet)
@@ -145,11 +143,11 @@ program multisig_core.aleo {
     ///////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////
-    // One-off privileged operations
+    // Privileged operations
     ///////////////////////////////////////////////////////////////////////////
 
     // Initialize the multisig_core program
-    async transition init(guard_create_wallet: bool) -> Future {
+    async transition init(upgrader_address: address, guard_create_wallet: bool) -> Future {
         let caller = self.caller;
 
         return async {
@@ -158,6 +156,7 @@ program multisig_core.aleo {
             assert(!program_settings_map.contains(true));
             program_settings_map.set(true, ProgramSettings {
                 allow_upgrades: true,
+                upgrader_address: upgrader_address,
                 guard_create_wallet: guard_create_wallet,
             });
         };
@@ -167,15 +166,36 @@ program multisig_core.aleo {
     async transition disallow_upgrades() -> Future {
         let caller = self.caller;
         return async {
-            assert_eq(caller, UPGRADER_ADDRESS);
-
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
+
+            assert_eq(caller, program_settings.upgrader_address);
+
             program_settings_map.set(true, ProgramSettings {
                 allow_upgrades: false,
+                upgrader_address: program_settings.upgrader_address,
                 guard_create_wallet: program_settings.guard_create_wallet,
             });
         };
+    }
+
+    // Change the upgrader_address to a new address
+    async transition set_upgrader_address(new_upgrader_address: address) -> Future {
+        let caller = self.caller;
+        return async {
+            assert(program_settings_map.contains(true));
+            let program_settings = program_settings_map.get(true);
+
+            assert_eq(caller, program_settings.upgrader_address);
+            assert(program_settings.allow_upgrades);
+
+            program_settings_map.set(true, ProgramSettings {
+                allow_upgrades: program_settings.allow_upgrades,
+                upgrader_address: new_upgrader_address,
+                guard_create_wallet: program_settings.guard_create_wallet,
+            });
+        };
+
     }
 
     ///////////////////////////////////////////////////////////////////////////
