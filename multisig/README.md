@@ -46,6 +46,7 @@ In guarded mode, to create a wallet with `wallet_id`:
        guarded_create_wallet_id: address, // The wallet_id to be created
    }
    ```
+   You can do this using the helper utility in `./utils/hash_guarded_create_wallet_op.js` (remember to `npm install` first!).
 2. Authorized signers of `multisig_core.aleo` must sign this `signing_op_id` using the standard signing flow.
 3. Once the signature threshold is met, `create_wallet` can be called. The program verifies that the creation of this specific `wallet_id` has been approved by the Guard Wallet.
 
