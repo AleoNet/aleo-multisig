@@ -71,7 +71,7 @@ In addition to the `multisig_wallet.aleo` program, we provide a `test_upgrades.a
 ## Development Setup
 
 ### Prerequisites
-- `leo` CLI for program compilation and deployment. **The code here is known to work with `leo 3.3.1`.**
+- `leo` CLI for program compilation and deployment. **The code here is known to work with `leo 3.4.0`.**
 - Node.js 22+ for running tests
 - Local Aleo network (devnet recommended for testing)
 
@@ -82,7 +82,7 @@ In addition to the `multisig_wallet.aleo` program, we provide a `test_upgrades.a
 NETWORK=testnet
 PRIVATE_KEY=APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH
 ENDPOINT=http://localhost:3030
-CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10
+CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10,11
 ```
 
 ### Starting a local devnet
@@ -90,14 +90,14 @@ CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10
 You will want to start a local devnet using this command, **using your custom-built leo binary**:
 ```bash
 leo devnet --storage tmp --clear-storage --snarkos ./tmp/snarkos --snarkos-features test_network --install
-leo devnet --storage tmp --clear-storage --snarkos ./tmp/snarkos --snarkos-features test_network --tmux --consensus-heights 0,1,2,3,4,5,6,7,8,9,10
+leo devnet --storage tmp --clear-storage --snarkos ./tmp/snarkos --snarkos-features test_network --tmux --consensus-heights 0,1,2,3,4,5,6,7,8,9,10,11
 ```
 
 ### Deploying the programs
 
 From inside the `programs/multisig_wallet` directory, run:
 ```bash
-leo deploy --broadcast --consensus-heights 0,1,2,3,4,5,6,7,8,9,10 -y
+leo deploy --broadcast --consensus-heights 0,1,2,3,4,5,6,7,8,9,10,11 -y
 ```
 
 **Initializing the core program:**
@@ -113,6 +113,6 @@ After you have built a custom version of the SDK as mentioned in the Prerequisit
 
 You should then be able to run `npm test`. The test suite uses `jest` and you can run a specific test instead of the whole suite if desired. For example:
 ```bash
-export CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10
+export CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10,11
 npm test -- -t 'Cannot create wallet with threshold greater than number of signers'
 ```
