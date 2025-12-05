@@ -27,6 +27,9 @@ describe('Multisig Guard Create Wallet Tests', () => {
     test('Cannot create wallet without signatures from guard wallet', async () => {
         const TEST_WALLET_ID = AleoUtils.randomAddress();
         const guardWalletId = "multisig_core.aleo";
+        const threshold = 2;
+        const aleoSigners = [AleoUtils.addresses[0], AleoUtils.addresses[1]];
+        const ecdsaSigners = [];
 
         // Step 1: Try to create a wallet (should fail)
         console.log(`Attempting to create wallet ${TEST_WALLET_ID} (should fail without guard approval)...`);
@@ -34,9 +37,9 @@ describe('Multisig Guard Create Wallet Tests', () => {
             await MultiSig.createWallet(
                 AleoUtils.accounts[0],
                 TEST_WALLET_ID,
-                2,
-                [AleoUtils.addresses[0], AleoUtils.addresses[1]],
-                []
+                threshold,
+                aleoSigners,
+                ecdsaSigners
             );
             fail('Expected wallet creation to fail without guard wallet signature');
         } catch (error) {
@@ -48,7 +51,7 @@ describe('Multisig Guard Create Wallet Tests', () => {
         expect(wallet).toBeNull();
 
         // Step 2: Initiate signing operation on the guard wallet
-        const signingOpId = AleoUtils.BHP256Hash(`{ guarded_create_wallet_id: ${TEST_WALLET_ID} }`);
+        const signingOpId = MultiSig.getGuardedCreateWalletSigningOpId(TEST_WALLET_ID, threshold, aleoSigners, ecdsaSigners);
 
         console.log(`Initiating signing operation on guard wallet for new wallet ${TEST_WALLET_ID}...`);
         await MultiSig.initiateSigningOp(AleoUtils.accounts[0], guardWalletId, signingOpId);
@@ -59,9 +62,9 @@ describe('Multisig Guard Create Wallet Tests', () => {
             await MultiSig.createWallet(
                 AleoUtils.accounts[0],
                 TEST_WALLET_ID,
-                2,
-                [AleoUtils.addresses[0], AleoUtils.addresses[1]],
-                []
+                threshold,
+                aleoSigners,
+                ecdsaSigners
             );
             fail('Expected wallet creation to fail with insufficient guard signatures');
         } catch (error) {
@@ -94,15 +97,56 @@ describe('Multisig Guard Create Wallet Tests', () => {
         await MultiSig.createWallet(
             AleoUtils.accounts[0],
             TEST_WALLET_ID,
-            2,
-            [AleoUtils.addresses[0], AleoUtils.addresses[1]],
-            []
+            threshold,
+            aleoSigners,
+            ecdsaSigners
         );
 
         // Verify wallet was created
         wallet = await MultiSig.getWallet(TEST_WALLET_ID);
         expect(wallet).not.toBeNull();
         expect(wallet.threshold).toBe(2);
+        console.log('Wallet created successfully!');
+    });
+
+    test('Can create wallet after guard wallet approves with correct parameters', async () => {
+        const TEST_WALLET_ID = AleoUtils.randomAddress();
+        const guardWalletId = "multisig_core.aleo";
+        const threshold = 1;
+        const aleoSigners = [AleoUtils.addresses[2]];
+        const ecdsaSigners = [];
+
+        // Compute the signing_op_id for the guarded create wallet op
+        const signingOpId = MultiSig.getGuardedCreateWalletSigningOpId(TEST_WALLET_ID, threshold, aleoSigners, ecdsaSigners);
+
+        // Step 1: Initiate signing operation on the guard wallet
+        console.log(`Initiating signing operation on guard wallet for new wallet ${TEST_WALLET_ID}...`);
+        await MultiSig.initiateSigningOp(AleoUtils.accounts[0], guardWalletId, signingOpId);
+
+        // Step 2: Add second signature to complete the signing
+        console.log('Adding second signature from accounts[1]...');
+        await MultiSig.sign(AleoUtils.accounts[1], guardWalletId, signingOpId.toString());
+
+        // Verify signing is complete
+        const isComplete = await MultiSig.isSigningComplete(guardWalletId, signingOpId.toString());
+        expect(isComplete).toBe(true);
+        console.log('Guard wallet signing operation completed');
+
+        // Step 3: Create wallet (should succeed)
+        console.log('Creating wallet...');
+        await MultiSig.createWallet(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            threshold,
+            aleoSigners,
+            ecdsaSigners
+        );
+
+        // Verify wallet was created
+        const wallet = await MultiSig.getWallet(TEST_WALLET_ID);
+        expect(wallet).not.toBeNull();
+        expect(wallet.threshold).toBe(1);
+        expect(wallet.num_signers).toBe(1);
         console.log('Wallet created successfully!');
     });
 

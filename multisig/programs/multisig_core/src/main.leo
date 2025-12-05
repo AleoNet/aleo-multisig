@@ -50,7 +50,7 @@ program multisig_core.aleo {
         // program name).
         // When create_wallet is called and this setting is set to true, we will check that
         // there is a completed signing operation with signing_op_id=hash(
-        //   GuardedCreateWalletOp { guarded_create_wallet_id: wallet_id }
+        //   GuardedCreateWalletOp { wallet_id: wallet_id, threshold: ... }
         // )
         // Only if such completed signing op exists will we allow the create_wallet call to succeed.
         // This could come in handy for instances of this program that want to prevent the general
@@ -68,7 +68,10 @@ program multisig_core.aleo {
     // Used to uniquely represent a signing_op_id when guard_create_wallet is used
     // (see comment in ProgramSettings).
     struct GuardedCreateWalletOp {
-        guarded_create_wallet_id: address,
+        wallet_id: address,
+        threshold: u8,
+        aleo_signers: [address; 4],
+        ecdsa_signers: [[u8; 20]; 4],
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -237,7 +240,12 @@ program multisig_core.aleo {
 
             // We might require a multisig operation for creating new wallets (unless this is the special wallet that manages that).
             if (program_settings.guard_create_wallet && wallet_id != self.address) {
-                let signing_op_id = BHP256::hash_to_field(GuardedCreateWalletOp { guarded_create_wallet_id: wallet_id });
+                let signing_op_id = BHP256::hash_to_field(GuardedCreateWalletOp {
+                    wallet_id: wallet_id,
+                    threshold: threshold,
+                    aleo_signers: aleo_signers,
+                    ecdsa_signers: ecdsa_signers,
+                });
                 let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: self.address, signing_op_id: signing_op_id });
                 assert(completed_signing_ops.contains(wallet_signing_op_id_hash));
             } else if (wallet_id == self.address) {
@@ -696,6 +704,19 @@ program multisig_core.aleo {
 
     transition get_signing_op_id_hash(public wallet_id: address, public signing_op_id: field) -> field {
         return get_signing_op_id_hash_fn(wallet_id, signing_op_id);
+    }
+
+    transition guarded_create_wallet_op_hash(public wallet_id: address,
+        public threshold: u8,
+        aleo_signers: [address; 4],
+        ecdsa_signers: [[u8; 20]; 4],
+    ) -> field {
+        return BHP256::hash_to_field(GuardedCreateWalletOp {
+            wallet_id: wallet_id,
+            threshold: threshold,
+            aleo_signers: aleo_signers,
+            ecdsa_signers: ecdsa_signers,
+        });
     }
 
     async transition assert_signing_completed(public wallet_id: address, public signing_op_id: field) -> Future {

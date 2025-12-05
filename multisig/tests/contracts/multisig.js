@@ -726,3 +726,29 @@ export async function execAdminOpRemoveEcdsaSigner(executorAccount, walletId, si
         ethAddress,
     );
 }
+
+/**
+ * Compute the signing_op_id for a guarded create_wallet operation.
+ * This matches the hash computed in the Leo program for GuardedCreateWalletOp.
+ *
+ * @param {string} walletId - The wallet ID to be created
+ * @param {number} threshold - The threshold for the new wallet
+ * @param {string[]} aleoSigners - Array of Aleo signer addresses (max 4)
+ * @param {string[]} ecdsaSigners - Array of ETH signer addresses (max 4)
+ * @returns {string} The signing_op_id field value
+ */
+export function getGuardedCreateWalletSigningOpId(walletId, threshold, aleoSigners = [], ecdsaSigners = []) {
+    const paddedAleoSigners = [...aleoSigners];
+    while (paddedAleoSigners.length < 4) {
+        paddedAleoSigners.push(AleoUtils.ALEO_ZERO_ADDR);
+    }
+
+    const paddedEcdsaSigners = [...ecdsaSigners];
+    while (paddedEcdsaSigners.length < 4) {
+        paddedEcdsaSigners.push(AleoUtils.ETH_ZERO_ADDR);
+    }
+    const paddedPlaintextEcdsaSigners = paddedEcdsaSigners.map((addrStr) => AleoUtils.bytesToPlaintext(getBytes(addrStr)));
+
+    const struct = `{ wallet_id: ${walletId}, threshold: ${threshold}u8, aleo_signers: [${paddedAleoSigners.join(', ')}], ecdsa_signers: [${paddedPlaintextEcdsaSigners.join(', ')}] }`;
+    return AleoUtils.BHP256Hash(struct);
+}
