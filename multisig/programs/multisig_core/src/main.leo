@@ -80,7 +80,7 @@ program multisig_core.aleo {
 
     struct WalletAleoSigner {
         wallet_id: address,
-        user: address,
+        aleo_signer: address,
     }
 
     struct WalletEcdsaSigner {
@@ -158,7 +158,10 @@ program multisig_core.aleo {
     // Privileged operations
     ///////////////////////////////////////////////////////////////////////////
 
-    // Initialize the multisig_core program
+    // @notice Initialize the multisig_core program
+    // @param upgrader_address The address that can upgrade the program
+    // @param guard_create_wallet Whether to guard the creation of new wallets with
+    //                            a multisig operation
     async transition init(upgrader_address: address, guard_create_wallet: bool) -> Future {
         let caller = self.caller;
 
@@ -174,7 +177,7 @@ program multisig_core.aleo {
         };
     }
 
-    // Disallow any future upgrades
+    // @notice Disallow any future upgrades
     async transition disallow_upgrades() -> Future {
         let caller = self.caller;
         return async {
@@ -191,7 +194,8 @@ program multisig_core.aleo {
         };
     }
 
-    // Change the upgrader_address to a new address
+    // @notice Change the upgrader_address to a new address
+    // @param new_upgrader_address The new upgrader address
     async transition set_upgrader_address(new_upgrader_address: address) -> Future {
         let caller = self.caller;
         return async {
@@ -214,10 +218,15 @@ program multisig_core.aleo {
     // Create a new multisig wallet
     ///////////////////////////////////////////////////////////////////////////
 
-    // Use ALEO_ZERO_ADDRESS/ETH_ZERO_ADDRESS for any unused signer.
-    // 4 of each signer was chosen arbitrarily, with the thinking that it will cover
-    // the majority of usecases. If more signers are needed, they can be added later
-    // via admin operations.
+    // @notice Create a new multisig wallet
+    // @dev 4 of each signer was chosen arbitrarily, with the thinking that it will cover
+    // @dev the majority of usecases. If more signers are needed, they can be added later
+    // @dev via admin operations.
+    // @param wallet_id The wallet id to create
+    // @param threshold The threshold, specifying the minimum numer of signatures required
+    //                  for operation completion.
+    // @param aleo_signers The ALEO signers for the wallet (use ALEO_ZERO_ADDRESS for unused signers)
+    // @param ecdsa_signers The ECDSA signers for the wallet (use ETH_ZERO_ADDRESS for unused signers)
     async transition create_wallet(
         public wallet_id: address,
         public threshold: u8,
@@ -228,10 +237,10 @@ program multisig_core.aleo {
         assert(threshold > 0u8 && threshold <= 8u8);
 
         let aleo_signer_hashes: [field; 4] = [
-            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, user: aleo_signers[0] }),
-            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, user: aleo_signers[1] }),
-            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, user: aleo_signers[2] }),
-            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, user: aleo_signers[3] }),
+            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, aleo_signer: aleo_signers[0] }),
+            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, aleo_signer: aleo_signers[1] }),
+            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, aleo_signer: aleo_signers[2] }),
+            BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, aleo_signer: aleo_signers[3] }),
         ];
         let ecdsa_signer_hashes: [field; 4] = [
             BHP256::hash_to_field(WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ecdsa_signers[0] }),
@@ -270,7 +279,7 @@ program multisig_core.aleo {
             assert(!wallets_map.contains(wallet_id));
 
             // Store signers + validate signers are unique
-            let aleo_zero_addr_hash = BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, user: ALEO_ZERO_ADDRESS });
+            let aleo_zero_addr_hash = BHP256::hash_to_field(WalletAleoSigner { wallet_id: wallet_id, aleo_signer: ALEO_ZERO_ADDRESS });
             let ecdsa_zero_addr_hash = BHP256::hash_to_field(WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ETH_ZERO_ADDRESS });
 
             let num_users: u8 = 0;
@@ -303,13 +312,14 @@ program multisig_core.aleo {
     // Begin a signing operation
     ///////////////////////////////////////////////////////////////////////////
 
-    // - wallet_id: The unique wallet identifier
-    // - signing_op_id: The signing operation identifier. Must be one that has not been used previously,
-    //                  or used previously and expired after reaching the expiration block height.
-    // - block_expiration: How many blocks is this signing operation valid for before it expires?
-    //                     Use MAX_BLOCK_HEIGHT to indicate no expiration.
-    //                     This should be set high enough to allow signers sufficient time to provide signatures.
-    //                     This only controls whether more signatures are accepted.
+    // @notice Initiate a new signing operation
+    // @param wallet_id The unique wallet identifier
+    // @param signing_op_id The signing operation identifier. Must be one that has not been used previously,
+    //                      or used previously and expired after reaching the expiration block height.
+    // @param block_expiration How many blocks is this signing operation valid for before it expires?
+    //                         Use MAX_BLOCK_HEIGHT to indicate no expiration.
+    //                         This should be set high enough to allow signers sufficient time to provide signatures.
+    //                         This only controls whether more signatures are accepted.
     //
     // NOTE: This code is duplicated inside `init_admin_op` due to Leo's limitation of not being able to call
     // one transition from another inside the same program.
@@ -318,7 +328,7 @@ program multisig_core.aleo {
         assert(block_expiration > 0);
         let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id });
 
-        let signer = WalletAleoSigner { wallet_id: wallet_id, user: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
         let signer_hash = BHP256::hash_to_field(signer);
 
          return (wallet_signing_op_id_hash, finalize_initiate_signing_op(
@@ -334,6 +344,13 @@ program multisig_core.aleo {
             }));
     }
 
+    // @notice Finalize the initiation of a signing operation (this is the "async" part of the initiate_signing_op transition)
+    // @param wallet_id The wallet ID of the wallet that is initiating the signing operation.
+    // @param wallet_signing_op_id_hash The hash of the wallet signing operation ID.
+    // @param aleo_signer_hash The hash of the Aleo signer.
+    // @param block_expiration How many blocks before the signing operation expires.
+    // @param admin_op The admin operation that is being finalized (could be set to all zeros/default values to indicate no admin op)
+    //
     // NOTE: This method has some specific behavior for when it is called from the context of finalizing an admin operation.
     // Ideally we would have a different async function for finalizing the admin operation that calls this function,
     // but Leo doesn't currently lets us do this. This was deemed to be too much code to duplicate, so instead we
@@ -421,27 +438,40 @@ program multisig_core.aleo {
     // Provide an Aleo signature to a signing operation
     ///////////////////////////////////////////////////////////////////////////
 
-    // Provide a signature for a given wallet_id+signing_op_id, for the current signing round.
-    // Note that by not enforcing the round is equal to a specific value, it is possible for the signer
-    // to sign an operation that is different than they were originally intending to sign - this can happen
-    // if a signing operation expires and a new one with the same signing_op_id is initiated, and the signer
-    // submits their signature after the new operation has been initiated.
-    // If this is a concern, use `sign_for_round`. The reason this method is provided is to provide a simpler user experience.
-    // Not having to know the current round makes it a bit easier to use, and in many cases this will be acceptable.
+    // @notice Provide a signature for a given wallet_id+signing_op_id, for the current signing round.
+    // @dev Note that by not enforcing the round is equal to a specific value, it is possible for the signer
+    // @dev to sign an operation that is different than they were originally intending to sign - this can happen
+    // @dev if a signing operation expires and a new one with the same signing_op_id is initiated, and the signer
+    // @dev submits their signature after the new operation has been initiated.
+    // @dev If this is a concern, use `sign_for_round`. The reason this method is provided is to provide a simpler user experience.
+    // @dev Not having to know the current round makes it a bit easier to use, and in many cases this will be acceptable.
+    // @param wallet_id The wallet id the signing operation belongs to
+    // @param signing_op_id The signing operation id
     async transition sign(public wallet_id: address, public signing_op_id: field) -> Future {
-        let signer = WalletAleoSigner { wallet_id: wallet_id, user: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
         let signer_hash = BHP256::hash_to_field(signer);
 
         return finalize_sign(wallet_id, signing_op_id, signer_hash, 0u32);
     }
 
+    // @notice Provide a signature for a given wallet_id+signing_op_id, for a specific round.
+    // @dev This is useful if you want to ensure that the signature is for a specific round, and not just the current round.
+    // @dev See notes in `sign` above.
+    // @param wallet_id The wallet id the signing operation belongs to
+    // @param signing_op_id The signing operation id
+    // @param round The round to sign for
     async transition sign_for_round(public wallet_id: address, public signing_op_id: field, public round: u32) -> Future {
-        let signer = WalletAleoSigner { wallet_id: wallet_id, user: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
         let signer_hash = BHP256::hash_to_field(signer);
 
         return finalize_sign(wallet_id, signing_op_id, signer_hash, round);
     }
 
+    // @notice Finalize a signing operation for a given wallet_id+signing_op_id, for a specific round.
+    // @param wallet_id The wallet id the signing operation belongs to
+    // @param signing_op_id The signing operation id
+    // @param signer_hash The hash of the signer (WalletAleoSigner or WalletEcdsaSigner)
+    // @param round The round to sign for, or zero for current round.
     async function finalize_sign(wallet_id: address, signing_op_id: field, signer_hash: field, round: u32) {
         // Ensure the wallet exists.
         assert(wallets_map.contains(wallet_id));
@@ -493,27 +523,48 @@ program multisig_core.aleo {
     // Provide an ECDSA signature to a signing operation
     ///////////////////////////////////////////////////////////////////////////
 
-    // Provide an ECDSA signature for a given wallet_id+signing_op_id, for the current signing round.
-    // Note that by not enforcing the round is equal to a specific value, it is possible for the signer
-    // to sign an operation that is different than they were originally intending to sign - this can happen
-    // if a signing operation expires and a new one with the same signing_op_id is initiated, and the signer
-    // submits their signature after the new operation has been initiated.
-    // If this is a concern, use `sign_ecdsa_for_round`. The reason this method is provided is to provide a simpler user experience.
-    // Not having to know the current round makes it a bit easier to use, and in many cases this will be acceptable.
-    // Nonce is a random number that has not been used previously. It is included in the data covered by the signature and prevents
-    // signature replay attacks.
+    // @notice Provide an ECDSA signature for a given wallet_id+signing_op_id, for the current signing round.
+    // @dev Note that by not enforcing the round is equal to a specific value, it is possible for the signer
+    // @dev to sign an operation that is different than they were originally intending to sign - this can happen
+    // @dev if a signing operation expires and a new one with the same signing_op_id is initiated, and the signer
+    // @dev submits their signature after the new operation has been initiated.
+    // @dev If this is a concern, use `sign_ecdsa_for_round`. The reason this method is provided is to provide a simpler user experience.
+    // @dev Not having to know the current round makes it a bit easier to use, and in many cases this will be acceptable.
+    // @dev Nonce is a random number that has not been used previously. It is included in the data covered by the signature and prevents
+    // @dev signature replay attacks.
+    // @param wallet_id The wallet id the signing operation belongs to
+    // @param signing_op_id The signing operation id
+    // @param ecdsa_signer The Ethererum address bytes that produced the signature
+    // @param sig The ECDSA signature
+    // @param nonce The nonce used for this signature
     async transition sign_ecdsa(public wallet_id: address, public signing_op_id: field, public ecdsa_signer: [u8; 20], public sig: [u8; 65], public nonce: u64) -> Future {
         let signer = WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ecdsa_signer };
 
         return finalize_sign_ecdsa(wallet_id, signing_op_id, signer, sig, nonce, 0u32);
     }
 
+    // @notice Provide an ECDSA signature for a given wallet_id+signing_op_id, for a specific signing round.
+    // @dev This is useful if you want to ensure that the signature is for a specific round, and not just the current round.
+    // @dev See notes in `sign_ecdsa` above.
+    // @param wallet_id The wallet id the signing operation belongs to
+    // @param signing_op_id The signing operation id
+    // @param ecdsa_signer The Ethererum address bytes that produced the signature
+    // @param sig The ECDSA signature
+    // @param nonce The nonce used for this signature
+    // @param round The signing round
     async transition sign_ecdsa_for_round(public wallet_id: address, public signing_op_id: field, public ecdsa_signer: [u8; 20], public sig: [u8; 65], public nonce: u64, public round: u32) -> Future {
         let signer = WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ecdsa_signer };
 
         return finalize_sign_ecdsa(wallet_id, signing_op_id, signer, sig, nonce, round);
     }
 
+    // @notice Finalize the signing operation.
+    // @param wallet_id The wallet id the signing operation belongs to
+    // @param signing_op_id The signing operation id
+    // @param signer The signer of the signature
+    // @param sig The ECDSA signature
+    // @param nonce The nonce used for this signature
+    // @param round The signing round
     async function finalize_sign_ecdsa(wallet_id: address, signing_op_id: field, signer: WalletEcdsaSigner, sig: [u8; 65], nonce: u64, round: u32) {
         // Ensure the wallet exists.
         assert(wallets_map.contains(wallet_id));
@@ -601,6 +652,9 @@ program multisig_core.aleo {
         ecdsa_signer: [u8; 20],
     }
 
+    // @notice A helper for hashing an AdminOp.
+    // @param wallet_id The wallet ID.
+    // @param admin_op The admin operation.
     inline get_admin_op_wallet_signer_hash(wallet_id: address, admin_op: AdminOp) -> field {
         assert(admin_op.op == ADMIN_OP_ADD_SIGNER || admin_op.op == ADMIN_OP_REMOVE_SIGNER);
 
@@ -609,7 +663,7 @@ program multisig_core.aleo {
         if (admin_op.aleo_signer != ALEO_ZERO_ADDRESS) {
             wallet_signer_hash = BHP256::hash_to_field(WalletAleoSigner {
                 wallet_id: wallet_id,
-                user: admin_op.aleo_signer,
+                aleo_signer: admin_op.aleo_signer,
             });
         }
 
@@ -628,6 +682,8 @@ program multisig_core.aleo {
 
     mapping pending_admin_ops: field => AdminOp; // hash(WalletSigningOpId) => AdminOp
 
+    // @notice A helper for ensuring an AdminOp is valid.
+    // @param admin_op The admin operation to validate.
     function assert_valid_admin_op(admin_op: AdminOp) {
         if (admin_op.op == ADMIN_OP_CHANGE_THRESHOLD) {
             assert_neq(admin_op.threshold, 0u8);
@@ -645,18 +701,27 @@ program multisig_core.aleo {
         }
     }
 
+    // @notice Initialize a new admin operation
+    // @param wallet_id The wallet id the admin operation applies to
+    // @param signing_op_id The signing op id
+    // @param block_expiration Number of blocks this operation is valid for before it expires
+    // @param admin_op The admin operation to perform
     async transition init_admin_op(public wallet_id: address, public signing_op_id: field, public block_expiration: u32, admin_op: AdminOp) -> (field, Future) {
         assert_valid_admin_op(admin_op);
 
         // NOTE: This is duplicated from initiate_signing_op
         let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id });
-        let signer = WalletAleoSigner { wallet_id: wallet_id, user: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
         let signer_hash = BHP256::hash_to_field(signer);
         let init_signing_op_fut = finalize_initiate_signing_op(wallet_id, wallet_signing_op_id_hash, signer_hash, block_expiration, admin_op);
 
         return (wallet_signing_op_id_hash, init_signing_op_fut);
     }
 
+    // @notice Execute an admin operation once it has been fully signed.
+    // @param wallet_id The wallet id the admin operation applies to
+    // @param signing_op_id The signing op id
+    // @param admin_op The admin operation to perform
     async transition exec_admin_op(public wallet_id: address, public signing_op_id: field, admin_op: AdminOp) -> Future {
         assert_valid_admin_op(admin_op);
 
@@ -717,20 +782,35 @@ program multisig_core.aleo {
     // Helpers
     ///////////////////////////////////////////////////////////////////////////
 
+    // @notice Check if a given WalletSigningOp has expired at a given block height
+    // @param signing_op The WalletSigningOp to check
+    // @param block_height The block height to check against
     inline signing_op_expired(signing_op: WalletSigningOp, block_height: u32) -> bool {
         return signing_op.expires_at_block < block_height;
     }
 
+    // @notice Get the hash of a WalletSigningOpId
+    // @param wallet_id The wallet ID
+    // @param signing_op_id The signing op ID
     function get_signing_op_id_hash_fn(wallet_id: address, signing_op_id: field) -> field {
         return BHP256::hash_to_field(WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id });
 
     }
 
+    // @notice Get the hash of a WalletSigningOpId
+    // @param wallet_id The wallet ID
+    // @param signing_op_id The signing op ID
     transition get_signing_op_id_hash(public wallet_id: address, public signing_op_id: field) -> field {
         return get_signing_op_id_hash_fn(wallet_id, signing_op_id);
     }
 
-    transition guarded_create_wallet_op_hash(public wallet_id: address,
+    // @notice Get the hash of a GuardedCreateWalletOp
+    // @param wallet_id The wallet ID
+    // @param threshold The threshold of the wallet
+    // @param aleo_signers The list of Aleo signers
+    // @param ecdsa_signers The list of ECDSA signers
+    transition guarded_create_wallet_op_hash(
+        public wallet_id: address,
         public threshold: u8,
         aleo_signers: [address; 4],
         ecdsa_signers: [[u8; 20]; 4],
@@ -743,17 +823,25 @@ program multisig_core.aleo {
         });
     }
 
+    // @notice Ensure a given signing operation has been completed for a given wallet id.
+    // @param wallet_id The wallet ID
+    // @param signing_op_id The signing op ID
     async transition assert_signing_completed(public wallet_id: address, public signing_op_id: field) -> Future {
         let fut = fin_assert_signing_completed(wallet_id, signing_op_id);
         return fut;
     }
 
+    // @notice The async part of `assert_signing_completed`
+    // @param wallet_id The wallet ID
+    // @param signing_op_id The signing op ID
     async function fin_assert_signing_completed(wallet_id: address, signing_op_id: field) {
         let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id });
         let signing_complete = completed_signing_ops.contains(wallet_signing_op_id_hash);
         assert(signing_complete);
     }
 
+    // @notice Calculate a message hash based on the message prefixing and hashing defined in EIP-191
+    // @param hash The hash to sign using the method defined in EIP-191
     inline to_eth_signed_message_hash(hash: [u8; 32]) -> [u8; 32] {
         let digest: [u8; 60] = [0u8; 60];
 

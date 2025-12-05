@@ -376,7 +376,7 @@ export async function getPendingSigningOp(walletId, signingOpId) {
  */
 export async function isAleoSigner(walletId, userAddress) {
     // Create the WalletAleoSigner struct to match Leo code structure
-    const walletSignerStruct = Plaintext.fromString(`{wallet_id: ${walletId}, user: ${userAddress} }`);
+    const walletSignerStruct = Plaintext.fromString(`{wallet_id: ${walletId}, aleo_signer: ${userAddress} }`);
 
     // Hash it to get the key used in signers_map
     const hasher = new BHP256();
