@@ -19,7 +19,7 @@
     {
       "name": "token_registry.aleo",
       "location": "local",
-      "path": "../../../token_registry",
+      "path": "../../token_registry",
       "edition": null
     }
   ],

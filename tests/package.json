@@ -8,7 +8,7 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
-    "@provablehq/sdk": "file:../../../sdk/sdk/",
+    "@provablehq/sdk": "file:../../sdk/sdk/",
     "ethers": "^6.15.0"
   },
   "devDependencies": {
