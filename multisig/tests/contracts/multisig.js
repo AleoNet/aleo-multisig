@@ -179,12 +179,26 @@ export async function sign(signerAccount, walletId, signingOpId) {
 }
 
 /**
+ * Helper for generating the signing operation ID hash with nonce
+ * This is used for ECDSA signatures which include a nonce to prevent replay attacks
+ *
+ * @param {string} walletId - Wallet identifier
+ * @param {string} signingOpId - Signing operation identifier
+ * @param {bigint} nonce - Unique nonce value
+ * @returns {string} The hashed signing operation ID with nonce
+ */
+export function getSigningOpIdNonceHash(walletId, signingOpId, nonce) {
+    return AleoUtils.BHP256Hash(`{wallet_id: ${walletId}, signing_op_id: ${signingOpId}, nonce: ${nonce}u64}`);
+}
+
+/**
  * Sign a pending operation with an ECDSA signature from an Ethereum wallet
  *
  * @param {Account} executorAccount - Account executing the transaction (pays fees, doesn't need to be a signer)
  * @param {Wallet} ethWallet - Ethers.js Wallet that will sign the operation
  * @param {string} walletId - Wallet identifier
  * @param {string} signingOpId - The signing operation identifier to sign
+ * @param {bigint} [nonce] - Optional nonce to prevent replay attacks (random if not provided)
  * @returns {Promise<Object>} The signature transaction object
  *
  * @example
@@ -193,14 +207,19 @@ export async function sign(signerAccount, walletId, signingOpId) {
  * const ethWallet = Wallet.createRandom();
  * await signEcdsa(accounts[0], ethWallet, walletId, signingOpId);
  */
-export async function signEcdsa(executorAccount, ethWallet, walletId, signingOpId) {
+export async function signEcdsa(executorAccount, ethWallet, walletId, signingOpId, nonce = null) {
     console.log(`Ethereum wallet ${ethWallet.address} signing operation ${signingOpId}...`);
 
-    // Get the wallet_signing_op_id_hash that needs to be signed
-    const walletSigningOpIdHash = getSigningOpIdHash(walletId, signingOpId);
+    // Use provided nonce or generate a random one
+    if (nonce === null) {
+        nonce = BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+    }
+
+    // Get the hash that includes the nonce - this is what gets signed
+    const nonceHash = getSigningOpIdNonceHash(walletId, signingOpId, nonce);
 
     // Convert the hash to 32 bytes for ECDSA signing
-    const hashField = Field.fromString(walletSigningOpIdHash);
+    const hashField = Field.fromString(nonceHash);
     const msg32 = hashField.toBytesLe();
 
     // Sign the message with the Ethereum wallet
@@ -214,7 +233,7 @@ export async function signEcdsa(executorAccount, ethWallet, walletId, signingOpI
         executorAccount,
         "multisig_core.aleo",
         "sign_ecdsa",
-        [walletId, signingOpId, AleoUtils.bytesToPlaintext(ethAddrBytes), AleoUtils.bytesToPlaintext(sigBytes)]
+        [walletId, signingOpId, AleoUtils.bytesToPlaintext(ethAddrBytes), AleoUtils.bytesToPlaintext(sigBytes), `${nonce}u64`]
     );
 
     console.log(`Successfully signed operation ${signingOpId} with ECDSA`);
@@ -252,16 +271,22 @@ export async function signForRound(signerAccount, walletId, signingOpId, round) 
  * @param {string} walletId - Wallet identifier
  * @param {string} signingOpId - The signing operation identifier to sign
  * @param {number} round - The specific round number to sign for
+ * @param {bigint} [nonce] - Optional nonce to prevent replay attacks (random if not provided)
  * @returns {Promise<Object>} The signature transaction object
  */
-export async function signEcdsaForRound(executorAccount, ethWallet, walletId, signingOpId, round) {
+export async function signEcdsaForRound(executorAccount, ethWallet, walletId, signingOpId, round, nonce = null) {
     console.log(`Ethereum wallet ${ethWallet.address} signing operation ${signingOpId} for round ${round}...`);
 
-    // Get the wallet_signing_op_id_hash that needs to be signed
-    const walletSigningOpIdHash = getSigningOpIdHash(walletId, signingOpId);
+    // Use provided nonce or generate a random one
+    if (nonce === null) {
+        nonce = BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+    }
+
+    // Get the hash that includes the nonce - this is what gets signed
+    const nonceHash = getSigningOpIdNonceHash(walletId, signingOpId, nonce);
 
     // Convert the hash to 32 bytes for ECDSA signing
-    const hashField = Field.fromString(walletSigningOpIdHash);
+    const hashField = Field.fromString(nonceHash);
     const msg32 = hashField.toBytesLe();
 
     // Sign the message with the Ethereum wallet
@@ -275,7 +300,7 @@ export async function signEcdsaForRound(executorAccount, ethWallet, walletId, si
         executorAccount,
         "multisig_core.aleo",
         "sign_ecdsa_for_round",
-        [walletId, signingOpId, AleoUtils.bytesToPlaintext(ethAddrBytes), AleoUtils.bytesToPlaintext(sigBytes), `${round}u32`]
+        [walletId, signingOpId, AleoUtils.bytesToPlaintext(ethAddrBytes), AleoUtils.bytesToPlaintext(sigBytes), `${nonce}u64`, `${round}u32`]
     );
 
     console.log(`Successfully signed operation ${signingOpId} with ECDSA for round ${round}`);

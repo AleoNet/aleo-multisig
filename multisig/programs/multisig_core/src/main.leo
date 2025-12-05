@@ -111,6 +111,13 @@ program multisig_core.aleo {
         signing_op_id: field,
     }
 
+    // A version of the above struct that includes a nonce.
+    struct WalletSigningOpIdNonce {
+        wallet_id: address,
+        signing_op_id: field,
+        nonce: u64,
+    }
+
     // Data stored for a signing operation
     struct WalletSigningOp {
         // Number of valid signatures received so far.
@@ -142,6 +149,8 @@ program multisig_core.aleo {
     mapping pending_signing_confirmations: field => u32;
 
     mapping completed_signing_ops: field => u32; // hash(WalletSigningOpId) => block height when the signature that got us to the threshold was provided.
+
+    mapping used_nonces: field => bool; // hash(WalletSigningOpIdNonce) => true for seen WalletSigningOpIdNonce
 
     ///////////////////////////////////////////////////////////////////////////
 
@@ -491,25 +500,32 @@ program multisig_core.aleo {
     // submits their signature after the new operation has been initiated.
     // If this is a concern, use `sign_ecdsa_for_round`. The reason this method is provided is to provide a simpler user experience.
     // Not having to know the current round makes it a bit easier to use, and in many cases this will be acceptable.
-    async transition sign_ecdsa(public wallet_id: address, public signing_op_id: field, public ecdsa_signer: [u8; 20], public sig: [u8; 65]) -> Future {
+    // Nonce is a random number that has not been used previously. It is included in the data covered by the signature and prevents
+    // signature replay attacks.
+    async transition sign_ecdsa(public wallet_id: address, public signing_op_id: field, public ecdsa_signer: [u8; 20], public sig: [u8; 65], public nonce: u64) -> Future {
         let signer = WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ecdsa_signer };
 
-        return finalize_sign_ecdsa(wallet_id, signing_op_id, signer, sig, 0u32);
+        return finalize_sign_ecdsa(wallet_id, signing_op_id, signer, sig, nonce, 0u32);
     }
 
-    async transition sign_ecdsa_for_round(public wallet_id: address, public signing_op_id: field, public ecdsa_signer: [u8; 20], public sig: [u8; 65], public round: u32) -> Future {
+    async transition sign_ecdsa_for_round(public wallet_id: address, public signing_op_id: field, public ecdsa_signer: [u8; 20], public sig: [u8; 65], public nonce: u64, public round: u32) -> Future {
         let signer = WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ecdsa_signer };
 
-        return finalize_sign_ecdsa(wallet_id, signing_op_id, signer, sig, round);
+        return finalize_sign_ecdsa(wallet_id, signing_op_id, signer, sig, nonce, round);
     }
 
-    async function finalize_sign_ecdsa(wallet_id: address, signing_op_id: field, signer: WalletEcdsaSigner, sig: [u8; 65], round: u32) {
+    async function finalize_sign_ecdsa(wallet_id: address, signing_op_id: field, signer: WalletEcdsaSigner, sig: [u8; 65], nonce: u64, round: u32) {
         // Ensure the wallet exists.
         assert(wallets_map.contains(wallet_id));
 
         // Signer must be known.
         let signer_hash = BHP256::hash_to_field(signer);
         assert(signers_map.contains(signer_hash));
+
+        // Nonce must be unique for this wallet_id/signing_op_id
+        let nonce_hash = BHP256::hash_to_field(WalletSigningOpIdNonce { wallet_id: wallet_id, signing_op_id: signing_op_id, nonce: nonce });
+        assert(!used_nonces.contains(nonce_hash));
+        used_nonces.set(nonce_hash, true);
 
         // Signing op must exist and not be expired.
         let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id });
@@ -522,7 +538,9 @@ program multisig_core.aleo {
         assert(round == 0u32 || round == signing_op.round);
 
         // Signature must be valid.
-        let hash_bits: [bool; 253] = Serialize::to_bits_raw(wallet_signing_op_id_hash);
+        // NOTE: The signature is over the hash of a `WalletSigningOpIdNonce`, capturing
+        // the wallet_id, signing_op_id and nonce.
+        let hash_bits: [bool; 253] = Serialize::to_bits_raw(nonce_hash);
         let padded_bits: [bool; 256] = [false; 256];
         for i: u8 in 0..253 {
             padded_bits[i] = hash_bits[i];

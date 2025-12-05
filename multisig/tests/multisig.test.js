@@ -554,6 +554,83 @@ describe('Multisig Tests', () => {
         console.log('Signing operation completed (2/2 signatures)');
     });
 
+    test('Cannot reuse ECDSA nonce', async () => {
+        const TEST_WALLET_ID = AleoUtils.randomAddress();
+
+        const ethWallet1 = Wallet.createRandom();
+        const ethWallet2 = Wallet.createRandom();
+
+        console.log(`ECDSA Signer 1: ${ethWallet1.address}`);
+        console.log(`ECDSA Signer 2: ${ethWallet2.address}`);
+
+        // Create wallet with threshold=2 and two ECDSA signers
+        await MultiSig.createWallet(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            2,
+            [],
+            [ethWallet1.address, ethWallet2.address],
+            false,
+        );
+
+        // === Test 1: Cannot reuse nonce within the same round ===
+        const signingOpId1 = Field.random();
+        console.log(`Initiating first signing operation ${signingOpId1.toString()}...`);
+        await MultiSig.initiateSigningOp(AleoUtils.accounts[3], TEST_WALLET_ID, signingOpId1);
+
+        // Sign with a specific nonce
+        const fixedNonce = 12345n;
+        console.log(`Signing with nonce ${fixedNonce}...`);
+        await MultiSig.signEcdsa(AleoUtils.accounts[3], ethWallet1, TEST_WALLET_ID, signingOpId1.toString(), fixedNonce);
+
+        // Try to reuse the same nonce with a different signer (should fail)
+        console.log('Attempting to reuse same nonce with different signer...');
+        await expect(
+            MultiSig.signEcdsa(AleoUtils.accounts[3], ethWallet2, TEST_WALLET_ID, signingOpId1.toString(), fixedNonce)
+        ).rejects.toThrow();
+
+        // Using a different nonce should work
+        const differentNonce = 67890n;
+        console.log(`Signing with different nonce ${differentNonce}...`);
+        await MultiSig.signEcdsa(AleoUtils.accounts[3], ethWallet2, TEST_WALLET_ID, signingOpId1.toString(), differentNonce);
+
+        // Verify signing is complete
+        let isComplete = await MultiSig.isSigningComplete(TEST_WALLET_ID, signingOpId1.toString());
+        expect(isComplete).toBe(true);
+        console.log('First signing operation completed');
+
+        // === Test 2: Cannot reuse nonce after round expires and new one initiated ===
+        const signingOpId2 = Field.random();
+        const blockExpiration = 1;
+        console.log(`Initiating second signing operation with short expiration...`);
+        await MultiSig.initiateSigningOp(AleoUtils.accounts[3], TEST_WALLET_ID, signingOpId2, blockExpiration);
+
+        // Sign with a new nonce
+        const nonceForExpiredRound = 11111n;
+        await MultiSig.signEcdsa(AleoUtils.accounts[3], ethWallet1, TEST_WALLET_ID, signingOpId2.toString(), nonceForExpiredRound);
+
+        // Let it expire
+        console.log('Waiting for expiration...');
+        await AleoUtils.advanceBlocks(blockExpiration + 1);
+
+        // Re-initiate the same signing operation
+        console.log('Re-initiating the signing operation...');
+        await MultiSig.initiateSigningOp(AleoUtils.accounts[3], TEST_WALLET_ID, signingOpId2, 100);
+
+        // Try to reuse the nonce from the expired round (should fail)
+        console.log('Attempting to reuse nonce from expired round...');
+        await expect(
+            MultiSig.signEcdsa(AleoUtils.accounts[3], ethWallet1, TEST_WALLET_ID, signingOpId2.toString(), nonceForExpiredRound)
+        ).rejects.toThrow();
+
+        // Using a fresh nonce should work
+        const freshNonce = 22222n;
+        console.log(`Signing with fresh nonce ${freshNonce}...`);
+        await MultiSig.signEcdsa(AleoUtils.accounts[3], ethWallet1, TEST_WALLET_ID, signingOpId2.toString(), freshNonce);
+
+        console.log('ECDSA nonce reuse prevention test completed successfully!');
+    });
+
     test('Cannot sign twice with the same Aleo signer', async () => {
         const TEST_WALLET_ID = AleoUtils.randomAddress();
         // Create wallet with 3 signers and threshold 3
