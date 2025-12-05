@@ -394,10 +394,16 @@ program multisig_core.aleo {
             });
         }
 
-        if (admin_op.op != ADMIN_OP_INVALID) {
-            // Note: We do not care if there is already an entry in pending_admin_ops.
-            // There might be one from a previously expired signing operation. We are guaranteed we are not
-            // overwriting a currently active admin operation because of the checks above.
+        // If this signing op was used for an admin operation, it must always be used for the same operation.
+        // If it wasn't, then it must always be used for a non-admin operation.
+        if (pending_admin_ops.contains(wallet_signing_op_id_hash)) {
+            let existing_admin_op = pending_admin_ops.get(wallet_signing_op_id_hash);
+            assert_eq(admin_op, existing_admin_op);
+        } else {
+            // Note that in cases where this finalize call is not an admin op, admin_op.op
+            // will be ADMIN_OP_INVALID, so no admin op can be executed.
+            // We always store a value here so that if a signing op gets re-used due to expiration,
+            // it cannot be "upgraded" to an admin op or be re-purposed for a different admin op.
             pending_admin_ops.set(wallet_signing_op_id_hash, admin_op);
         }
     }

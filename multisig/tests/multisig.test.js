@@ -1601,6 +1601,131 @@ describe('Multisig Tests', () => {
         }
     });
 
+    test('Expired non-admin-op signing op cannot be re-initiated as an admin op', async () => {
+        const TEST_WALLET_ID = AleoUtils.randomAddress();
+        await MultiSig.createWallet(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            2,
+            [AleoUtils.addresses[0], AleoUtils.addresses[1]],
+            [],
+        );
+
+        const signingOpId = Field.random();
+        const blockExpiration = 1;
+
+        // Step 1: Initiate a regular (non-admin) signing operation
+        console.log('Initiating regular signing operation...');
+        await MultiSig.initiateSigningOp(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            signingOpId,
+            blockExpiration,
+        );
+
+        // Step 2: Let it expire
+        console.log('Waiting for expiration...');
+        await AleoUtils.advanceBlocks(blockExpiration + 1);
+
+        // Step 3: Try to re-initiate as an admin operation (should fail)
+        console.log('Attempting to re-initiate as admin op (should fail)...');
+        await expect(
+            MultiSig.adminOpSetThreshold(
+                AleoUtils.accounts[0],
+                TEST_WALLET_ID,
+                signingOpId,
+                1,
+                blockExpiration,
+            )
+        ).rejects.toThrow();
+
+        // Step 4: Verify we can still re-initiate as a regular signing op
+        console.log('Re-initiating as regular signing op (should succeed)...');
+        await MultiSig.initiateSigningOp(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            signingOpId,
+            blockExpiration,
+        );
+
+        console.log('Test passed: expired non-admin-op cannot be upgraded to admin op');
+    });
+
+    test('Expired admin op can only be re-initiated as the same admin op', async () => {
+        const TEST_WALLET_ID = AleoUtils.randomAddress();
+        await MultiSig.createWallet(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            2,
+            [AleoUtils.addresses[0], AleoUtils.addresses[1]],
+            [],
+        );
+
+        const signingOpId = Field.random();
+        const blockExpiration = 1;
+
+        // Step 1: Initiate an admin operation (set threshold to 1)
+        console.log('Initiating admin op to set threshold to 1...');
+        await MultiSig.adminOpSetThreshold(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            signingOpId,
+            1,
+            blockExpiration,
+        );
+
+        // Step 2: Let it expire
+        console.log('Waiting for expiration...');
+        await AleoUtils.advanceBlocks(blockExpiration + 1);
+
+        // Step 3: Try to re-initiate as a different admin op (should fail)
+        console.log('Attempting to re-initiate as add signer admin op (should fail)...');
+        await expect(
+            MultiSig.adminOpAddAleoSigner(
+                AleoUtils.accounts[0],
+                TEST_WALLET_ID,
+                signingOpId,
+                AleoUtils.addresses[2],
+                blockExpiration,
+            )
+        ).rejects.toThrow();
+
+        // Step 4: Try to re-initiate as the same admin op but with different value (should fail)
+        console.log('Attempting to re-initiate as set threshold with different value (should fail)...');
+        await expect(
+            MultiSig.adminOpSetThreshold(
+                AleoUtils.accounts[0],
+                TEST_WALLET_ID,
+                signingOpId,
+                2, // Different threshold value
+                blockExpiration,
+            )
+        ).rejects.toThrow();
+
+        // Step 5: Try to re-initiate as a regular signing op (should fail)
+        console.log('Attempting to re-initiate as regular signing op (should fail)...');
+        await expect(
+            MultiSig.initiateSigningOp(
+                AleoUtils.accounts[0],
+                TEST_WALLET_ID,
+                signingOpId,
+                blockExpiration,
+            )
+        ).rejects.toThrow();
+
+        // Step 6: Re-initiate as the same admin op with same values (should succeed)
+        console.log('Re-initiating as the same admin op (should succeed)...');
+        await MultiSig.adminOpSetThreshold(
+            AleoUtils.accounts[0],
+            TEST_WALLET_ID,
+            signingOpId,
+            1,
+            blockExpiration,
+        );
+
+        console.log('Test passed: expired admin op can only be re-initiated as the same admin op');
+    });
+
     test('Can use MAX_BLOCK_HEIGHT for block expiration', async () => {
         const TEST_WALLET_ID = AleoUtils.randomAddress();
         const MAX_BLOCK_HEIGHT = 4294967295; // u32 max value
