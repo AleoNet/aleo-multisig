@@ -43,7 +43,10 @@ In guarded mode, to create a wallet with `wallet_id`:
 1. Calculate the `signing_op_id` by hashing a `GuardedCreateWalletOp` struct:
    ```leo
    struct GuardedCreateWalletOp {
-       guarded_create_wallet_id: address, // The wallet_id to be created
+       wallet_id: address,
+       threshold: u8,
+       aleo_signers: [address; 4],
+       ecdsa_signers: [[u8; 20]; 4],
    }
    ```
    You can do this using the helper utility in `./utils/hash_guarded_create_wallet_op.js` (remember to `npm install` first!).
@@ -55,10 +58,10 @@ In guarded mode, to create a wallet with `wallet_id`:
 The `multisig_core.aleo` program includes built-in access controls for deployment and upgrades.
 
 ### Roles
-* **Deployer**: The address allowed to deploy the initial version (`edition == 0`) and call the `init` transition.
-* **Upgrader**: The address allowed to deploy future versions (`edition > 0`) and call `disallow_upgrades`.
+* **Deployer**: The address allowed to deploy the initial version (`edition == 0`) and call the `init` transition. This address is hardcoded as a `const` in `multisig_core.aleo`.
+* **Upgrader**: The address allowed to deploy future versions (`edition > 0`) and call `disallow_upgrades`. This address is set via the `init` transition and can be changed later by calling `set_upgrader_address`.
 
-**IMPORTANT:** These addresses are hardcoded as `const` in `multisig_core.aleo`. You **MUST** change them to your own addresses before deployment.
+**IMPORTANT:** The deployer address is hardcoded as `const` in `multisig_core.aleo`. You **MUST** change it to your own address before deployment.
 
 ### Upgrade Kill Switch
 The program includes an upgrade kill switch. By default, upgrades are allowed (initialized to `true` in `init`).
