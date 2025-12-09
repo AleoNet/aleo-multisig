@@ -2,7 +2,8 @@
   "program": "multisig_core.aleo",
   "version": "0.1.0",
   "description": "",
-  "license": "MIT",
+  "leo": "3.4.0",
+  "license": "GPL",
   "dependencies": null,
   "dev_dependencies": null
 }
