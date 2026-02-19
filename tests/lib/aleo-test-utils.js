@@ -75,7 +75,7 @@ export async function execute(account, programName, functionName, inputs, skipPr
         Array.isArray(input) ? `[${input.join(',')}]` : input
     );
 
-    const transaction = await programManager.buildExecutionTransaction({
+    const transaction = await programManager.buildDevnodeExecutionTransaction({
         programName,
         functionName,
         priorityFee: 0,
