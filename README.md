@@ -105,10 +105,12 @@ leo deploy --broadcast --consensus-heights 0,1,2,3,4,5,6,7,8,9,10,11 -y
 
 **Initializing the core program:**
 
-After deployment, you must initialize the `multisig_core.aleo` program. For example, to allow open wallet creation:
+After deployment, you must initialize the `multisig_core.aleo` program. The `init` transition takes the **upgrader** address (allowed to deploy future editions of this program and to call `disallow_upgrades`) and the **guard_create_wallet** flag. For example, to set yourself as upgrader and allow open wallet creation (anyone may call `create_wallet` when `guard_create_wallet` is false):
 ```bash
-leo execute --broadcast --yes multisig_core.aleo/init false
+leo execute --broadcast --yes multisig_core.aleo/init <your_upgrader_address> false
 ```
+
+Replace `<your_upgrader_address>` with the Aleo address that should control upgrades (often the same account you use to deploy). To require multisig approval from the program’s own guard wallet before new wallets can be created, pass `true` instead of `false`.
 
 ### Running tests
 
