@@ -29,7 +29,7 @@ Hiding signer identities would likely only be possible using Aleo Records, simil
 
 ### Note regarding token_registry.aleo
 
-To simplify local development, this repository contains a `leo v4.x`-compatible version of the `token_registry.aleo` program. This differs from the version deployed to testnet/mainnet. If you wish to deploy your own company of `multisig_wallet.aleo` you should change its dependencies in the `program.json` file to use the network version instead of the local version.
+To simplify local development, this repository contains a `leo v4.x`-compatible version of the `token_registry.aleo` program. This differs from the version deployed to testnet/mainnet. If you wish to deploy your own copy of `multisig_wallet.aleo` you should change its dependencies in the `program.json` file to use the network version instead of the local version.
 
 ## Global Configuration
 
