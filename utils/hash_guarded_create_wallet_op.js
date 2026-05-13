@@ -32,6 +32,17 @@ if (separatorIndex === -1) {
   ecdsaSigners = args.slice(separatorIndex + 1);
 }
 
+// On-chain `GuardedCreateWalletOp` uses fixed arrays of length 4; extra CLI args
+// would change the plaintext and produce a hash that never matches `finalize`.
+if (aleoSigners.length > 4) {
+  console.error('At most 4 Aleo signers (pad unused slots with zero addresses in Leo).');
+  process.exit(1);
+}
+if (ecdsaSigners.length > 4) {
+  console.error('At most 4 ECDSA signers (pad unused slots with zero addresses in Leo).');
+  process.exit(1);
+}
+
 // Pad to 4 elements
 while (aleoSigners.length < 4) {
   aleoSigners.push(ALEO_ZERO_ADDR);

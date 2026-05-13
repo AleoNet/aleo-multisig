@@ -27,6 +27,10 @@ A multisig operation consists of three phases:
 This implementation does not try to hide the signer identities (addresses). A decision was made to prioritize code simplicity and ease of usability as much as possible.
 Hiding signer identities would likely only be possible using Aleo Records, similar to the approach used in https://github.com/zerosecurehq/zerosecure-multisig-program/tree/main, which uses records to grant signing privileges. By avoiding records the implementation presented here provides support for an unlimited number of signers, and a simplified interface that is more user friendly and require less work when wallet configuration changes.
 
+### Note regarding token_registry.aleo
+
+To simplify local development, this repository contains a `leo v4.x`-compatible version of the `token_registry.aleo` program. This differs from the version deployed to testnet/mainnet. If you wish to deploy your own company of `multisig_wallet.aleo` you should change its dependencies in the `program.json` file to use the network version instead of the local version.
+
 ## Global Configuration
 
 The `multisig_core.aleo` program includes a global configuration that must be initialized via the `init` transition.
@@ -74,9 +78,9 @@ In addition to the `multisig_wallet.aleo` program, we provide a `test_upgrades.a
 ## Development Setup
 
 ### Prerequisites
-- `leo` CLI for program compilation and deployment. **The code here is known to work with `leo 3.4.0`.**
+- `leo` CLI for program compilation and deployment. **The code here is known to work with `leo 4.0.2`.**
 - Node.js 22+ for running tests
-- Local Aleo network (devnet recommended for testing)
+- Local devnode - see https://github.com/ProvableHQ/aleo-devnode/. **The code here is known to test successfully using v0.1.0.**
 
 ### Environment Configuration
 
@@ -85,30 +89,24 @@ In addition to the `multisig_wallet.aleo` program, we provide a `test_upgrades.a
 NETWORK=testnet
 PRIVATE_KEY=APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH
 ENDPOINT=http://localhost:3030
-CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10,11
-```
-
-### Starting a local devnet
-
-You will want to start a local devnet using this command, **using your custom-built leo binary**:
-```bash
-leo devnet --storage tmp --clear-storage --snarkos ./tmp/snarkos --snarkos-features test_network --install
-leo devnet --storage tmp --clear-storage --snarkos ./tmp/snarkos --snarkos-features test_network --tmux --consensus-heights 0,1,2,3,4,5,6,7,8,9,10,11
+CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10,11,12,13
 ```
 
 ### Deploying the programs
 
 From inside the `programs/multisig_wallet` directory, run:
 ```bash
-leo deploy --broadcast --consensus-heights 0,1,2,3,4,5,6,7,8,9,10,11 -y
+leo deploy --skip-deploy-certificate --broadcast --yes
 ```
 
 **Initializing the core program:**
 
-After deployment, you must initialize the `multisig_core.aleo` program. For example, to allow open wallet creation:
+After deployment, you must initialize the `multisig_core.aleo` program. The `init` transition takes the **upgrader** address (allowed to deploy future editions of this program and to call `disallow_upgrades`) and the **guard_create_wallet** flag. For example, to set yourself as upgrader and allow open wallet creation (anyone may call `create_wallet` when `guard_create_wallet` is false):
 ```bash
-leo execute --broadcast --yes multisig_core.aleo/init false
+leo execute --skip-execute-proof --broadcast --yes multisig_core.aleo/init <your_upgrader_address> false
 ```
+
+Replace `<your_upgrader_address>` with the Aleo address that should control upgrades (often the same account you use to deploy). To require multisig approval from the program’s own guard wallet before new wallets can be created, pass `true` instead of `false`.
 
 ### Running tests
 
@@ -116,6 +114,5 @@ After you have built a custom version of the SDK as mentioned in the Prerequisit
 
 You should then be able to run `npm test`. The test suite uses `jest` and you can run a specific test instead of the whole suite if desired. For example:
 ```bash
-export CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10,11
 npm test -- -t 'Cannot create wallet with threshold greater than number of signers'
 ```

@@ -424,7 +424,7 @@ describe('Multisig Tests', () => {
             await MultiSig.adminOpAddAleoSigner(AleoUtils.accounts[0], TEST_WALLET_ID, addSigningOpId, AleoUtils.ALEO_ZERO_ADDR);
             fail('should not be able to add zero address as signer');
         } catch (error) {
-            expect(error).toContain('Failed to evaluate instruction');
+            expect(error).toContain('Stack evaluation failed');
         }
     });
 
@@ -1602,7 +1602,7 @@ describe('Multisig Tests', () => {
             );
             fail('Should have failed to add signer with both Aleo and ECDSA set');
         } catch (error) {
-            expect(error).toContain('Failed to evaluate instruction');
+            expect(error).toContain('Stack evaluation failed');
         }
     });
 
@@ -1625,7 +1625,7 @@ describe('Multisig Tests', () => {
             );
             fail('Should have failed to add signer with neither Aleo nor ECDSA set');
         } catch (error) {
-            expect(error).toContain('Failed to evaluate instruction');
+            expect(error).toContain('Stack evaluation failed');
         }
     });
 
@@ -1651,7 +1651,7 @@ describe('Multisig Tests', () => {
             );
             fail('Should have failed to remove signer with both Aleo and ECDSA set');
         } catch (error) {
-            expect(error).toContain('Failed to evaluate instruction');
+            expect(error).toContain('Stack evaluation failed');
         }
     });
 
@@ -1674,7 +1674,7 @@ describe('Multisig Tests', () => {
             );
             fail('Should have failed to remove signer with neither Aleo nor ECDSA set');
         } catch (error) {
-            expect(error).toContain('Failed to evaluate instruction');
+            expect(error).toContain('Stack evaluation failed');
         }
     });
 
