@@ -2,7 +2,7 @@
   "program": "multisig_wallet.aleo",
   "version": "0.1.0",
   "description": "",
-  "leo": "3.4.0",
+  "leo": "4.0.2",
   "license": "GPL",
   "dependencies": [
     {

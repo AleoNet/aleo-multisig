@@ -75,7 +75,11 @@ export async function execute(account, programName, functionName, inputs, skipPr
         Array.isArray(input) ? `[${input.join(',')}]` : input
     );
 
-    const transaction = await programManager.buildExecutionTransaction({
+    const buildFn = skipProof
+        ? (args) => programManager.buildDevnodeExecutionTransaction(args)
+        : (args) => programManager.buildExecutionTransaction(args);
+
+    const transaction = await buildFn({
         programName,
         functionName,
         priorityFee: 0,
@@ -83,7 +87,6 @@ export async function execute(account, programName, functionName, inputs, skipPr
         inputs: processedInputs,
         privateKey: account.privateKey(),
         keySearchParams: { "cacheKey": `${programName}:${functionName}` },
-	    skipProof,
     });
     return transaction;
 }
