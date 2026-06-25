@@ -1,16 +1,6 @@
 import credits.aleo;
 
-// The 'mtsp' program.
-program token_registry.aleo {
-  record Token {
-    owner: address,
-    amount: u128,
-    token_id: field,
-    external_authorization_required: bool,
-    authorized_until: u32
-  }
-
-  struct TokenMetadata {
+struct TokenMetadata {
     token_id: field,
     name: u128, // ASCII text represented in bits, and the u128 value of the bitstring
     symbol: u128, // ASCII text represented in bits, and the u128 value of the bitstring
@@ -40,15 +30,26 @@ program token_registry.aleo {
     token_id: field
   }
 
-  const CREDITS_RESERVED_TOKEN_ID: field = 3443843282313283355522573239085696902919850365217539366784739393210722344986field;
+const CREDITS_RESERVED_TOKEN_ID: field = 3443843282313283355522573239085696902919850365217539366784739393210722344986field;
+const MINTER_ROLE: u8 = 1u8;
+const BURNER_ROLE: u8 = 2u8;
+const SUPPLY_MANAGER_ROLE: u8 = 3u8;
+
+// The 'mtsp' program.
+program token_registry.aleo {
+  record Token {
+    owner: address,
+    amount: u128,
+    token_id: field,
+    external_authorization_required: bool,
+    authorized_until: u32
+  }
+
   mapping registered_tokens: field => TokenMetadata;
   mapping balances: field => Balance; // hash(token_id, account) => Balance
   mapping authorized_balances: field => Balance; // hash(token_id, account) => Balance
   mapping allowances: field => u128; // hash(token_id, account, spender) => Allowance
 
-  const MINTER_ROLE: u8 = 1u8;
-  const BURNER_ROLE: u8 = 2u8;
-  const SUPPLY_MANAGER_ROLE: u8 = 3u8;
   mapping roles: field => u8; // hash(token_id, account) => role
 
   //@noupgrade
@@ -953,8 +954,8 @@ program token_registry.aleo {
   }
 
   fn join(
-    private token_1: Token,
-    private token_2: Token
+    token_1: Token,
+    token_2: Token
   ) -> Token {
     // Check that the tokens are the same
     assert(token_1.token_id == token_2.token_id);
@@ -975,8 +976,8 @@ program token_registry.aleo {
   }
 
   fn split(
-    private token: Token,
-    private amount: u128
+    token: Token,
+    amount: u128
   ) -> (Token, Token) {
     assert(token.amount >= amount);
 
