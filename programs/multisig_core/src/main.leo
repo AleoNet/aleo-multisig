@@ -2,20 +2,124 @@
 //
 // This contains a reusable implementation of an k-of-n multisig scheme that supports both Aleo
 // signers and ECDSA signers. For more details see the README.md file.
-program multisig_core.aleo {
-    // The initial deployer, who is allowed to deploy the first edition of the program and call the init
+
+const ADMIN_OP_INVALID: u8 = 0;
+const ADMIN_OP_CHANGE_THRESHOLD: u8 = 1;
+const ADMIN_OP_ADD_SIGNER: u8 = 2;
+const ADMIN_OP_REMOVE_SIGNER: u8 = 3;
+
+// An administrative operation
+struct AdminOp {
+    op: u8,
+    // Only used for ADMIN_OP_CHANGE_THRESHOLD
+    threshold: u8,
+    // Only used for ADMIN_OP_ADD_SIGNER and ADMIN_OP_REMOVE_SIGNER.
+    // Only one of the two can be provided, the other has to be set to the zero address.
+    aleo_signer: address,
+    ecdsa_signer: [u8; 20],
+}
+
+// The initial deployer, who is allowed to deploy the first edition of the program and call the init
+// transition.
+// When setting guard_create_wallet=true, this is also the only address that is allowed to create
+// the `self.address` "guard wallet".
+//
+// This address belongs to the first standard Aleo test account.
+// IMPORTANT! Remember to change this before deployment!
+const DEPLOYER_ADDRESS: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
+
+const ALEO_ZERO_ADDRESS: address = aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc;
+const ETH_ZERO_ADDRESS: [u8; 20] = [0u8; 20];
+const MAX_BLOCK_HEIGHT: u32 = 4294967295; // 2**32 - 1
+
+// A unique identifier for a signing operation. Combining the user-provided signing_op_id
+// together with the wallet_id lets different wallets use the same signing_op_id across
+// different wallets.
+struct WalletSigningOpId {
+    wallet_id: address,
+    signing_op_id: field,
+}
+
+// A version of the above struct that includes a nonce.
+struct WalletSigningOpIdNonce {
+    wallet_id: address,
+    signing_op_id: field,
+    nonce: u64,
+}
+
+// Data stored for a signing operation
+struct WalletSigningOp {
+    // Number of valid signatures received so far.
+    confirmations: u8,
+    // The block height the signing op was initiated at.
+    initiated_at_block: u32,
+    // The last block.height we will accept signatures at.
+    // If set to MAX_BLOCK_HEIGHT, the signing operation will never expire.
+    expires_at_block: u32,
+    // Round number: This starts at 1 and increases every time signing is initiated using the same signing_op_id.
+    // (a previously-used signing_op_id can only be used again after expiration)
+    round: u32,
+}
+
+// A confirmation that a specific signing operation (identified by a hash of
+// WalletSigningOpId) has been signed by a specific user (identified by a hash of WalletAleoSigner/WalletEcdsaSigner)
+struct SigningOpConfirmation {
+    wallet_signing_op_id_hash: field,
+    wallet_signer_hash: field,
+}
+
+struct ProgramSettings {
+    // Whether upgrades are allowed. This serves as an upgrade kill switch, preventing
+    // further program upgrades once it is set to false.
+    allow_upgrades: bool,
+    // The address that is allowed to perform upgrades, as long as allow_upgrades = true.
+    // This is also the address that is allowed to turn off upgrades via the `disallow_upgrades`
     // transition.
-    // When setting guard_create_wallet=true, this is also the only address that is allowed to create
-    // the `self.address` "guard wallet".
+    upgrader_address: address,
+    // Whether we require a successful multisig operation to create a wallet.
+    // If we do, the initiator must first create a wallet (by calling create_wallet)
+    // with wallet_id=multisig_core.aleo (whatever that ends up being depends on the deployed
+    // program name).
+    // When create_wallet is called and this setting is set to true, we will check that
+    // there is a completed signing operation with signing_op_id=hash(
+    //   GuardedCreateWalletOp { wallet_id: wallet_id, threshold: ... }
+    // )
+    // Only if such completed signing op exists will we allow the create_wallet call to succeed.
+    // This could come in handy for instances of this program that want to prevent the general
+    // public from creating wallets on them. It can also help protect from people grabbing
+    // wallet_ids that the deployer cares about.
     //
-    // This address belongs to the first standard Aleo test account.
-    // IMPORTANT! Remember to change this before deployment!
-    const DEPLOYER_ADDRESS: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
+    // Note that the reason we hash the wallet_id inside a struct with a verbose field name
+    // is so that in the future we could potentially guard other operations without worrying
+    // about collisions in signing_op_id.
+    guard_create_wallet: bool,
+}
 
-    const ALEO_ZERO_ADDRESS: address = aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc;
-    const ETH_ZERO_ADDRESS: [u8; 20] = [0u8; 20];
-    const MAX_BLOCK_HEIGHT: u32 = 4294967295;  // 2**32 - 1
+// Used to uniquely represent a signing_op_id when guard_create_wallet is used
+// (see comment in ProgramSettings).
+struct GuardedCreateWalletOp {
+    wallet_id: address,
+    threshold: u8,
+    aleo_signers: [address; 4],
+    ecdsa_signers: [[u8; 20]; 4],
+}
 
+struct WalletAleoSigner {
+    wallet_id: address,
+    aleo_signer: address,
+}
+
+struct WalletEcdsaSigner {
+    wallet_id: address,
+    ecdsa_signer: [u8; 20],
+}
+
+struct WalletSettings {
+    threshold: u8,
+    num_signers: u8,
+}
+
+program multisig_core.aleo {
     @custom
     constructor() {
         if (self.edition == 0u16) {
@@ -34,64 +138,11 @@ program multisig_core.aleo {
     // Multisig settings - these are settings for the entire program
     ///////////////////////////////////////////////////////////////////////////
 
-    struct ProgramSettings {
-        // Whether upgrades are allowed. This serves as an upgrade kill switch, preventing
-        // further program upgrades once it is set to false.
-        allow_upgrades: bool,
-
-        // The address that is allowed to perform upgrades, as long as allow_upgrades = true.
-        // This is also the address that is allowed to turn off upgrades via the `disallow_upgrades`
-        // transition.
-        upgrader_address: address,
-
-        // Whether we require a successful multisig operation to create a wallet.
-        // If we do, the initiator must first create a wallet (by calling create_wallet)
-        // with wallet_id=multisig_core.aleo (whatever that ends up being depends on the deployed
-        // program name).
-        // When create_wallet is called and this setting is set to true, we will check that
-        // there is a completed signing operation with signing_op_id=hash(
-        //   GuardedCreateWalletOp { wallet_id: wallet_id, threshold: ... }
-        // )
-        // Only if such completed signing op exists will we allow the create_wallet call to succeed.
-        // This could come in handy for instances of this program that want to prevent the general
-        // public from creating wallets on them. It can also help protect from people grabbing
-        // wallet_ids that the deployer cares about.
-        //
-        // Note that the reason we hash the wallet_id inside a struct with a verbose field name
-        // is so that in the future we could potentially guard other operations without worrying
-        // about collisions in signing_op_id.
-        guard_create_wallet: bool,
-    }
-
     mapping program_settings_map: bool => ProgramSettings; // key is always "true"
-
-    // Used to uniquely represent a signing_op_id when guard_create_wallet is used
-    // (see comment in ProgramSettings).
-    struct GuardedCreateWalletOp {
-        wallet_id: address,
-        threshold: u8,
-        aleo_signers: [address; 4],
-        ecdsa_signers: [[u8; 20]; 4],
-    }
 
     ///////////////////////////////////////////////////////////////////////////
     // Wallet settings
     ///////////////////////////////////////////////////////////////////////////
-
-    struct WalletAleoSigner {
-        wallet_id: address,
-        aleo_signer: address,
-    }
-
-    struct WalletEcdsaSigner {
-        wallet_id: address,
-        ecdsa_signer: [u8; 20],
-    }
-
-    struct WalletSettings {
-        threshold: u8,
-        num_signers: u8,
-    }
 
     // Note that we do not distinguish between Aleo and ECDSA signers here since we're just storing hashes of their addresses
     // (together with the wallet_id).
@@ -103,45 +154,6 @@ program multisig_core.aleo {
     // Signing operations
     ///////////////////////////////////////////////////////////////////////////
 
-    // A unique identifier for a signing operation. Combining the user-provided signing_op_id
-    // together with the wallet_id lets different wallets use the same signing_op_id across
-    // different wallets.
-    struct WalletSigningOpId {
-        wallet_id: address,
-        signing_op_id: field,
-    }
-
-    // A version of the above struct that includes a nonce.
-    struct WalletSigningOpIdNonce {
-        wallet_id: address,
-        signing_op_id: field,
-        nonce: u64,
-    }
-
-    // Data stored for a signing operation
-    struct WalletSigningOp {
-        // Number of valid signatures received so far.
-        confirmations: u8,
-
-        // The block height the signing op was initiated at.
-        initiated_at_block: u32,
-
-        // The last block.height we will accept signatures at.
-        // If set to MAX_BLOCK_HEIGHT, the signing operation will never expire.
-        expires_at_block: u32,
-
-        // Round number: This starts at 1 and increases every time signing is initiated using the same signing_op_id.
-        // (a previously-used signing_op_id can only be used again after expiration)
-        round: u32,
-    }
-
-    // A confirmation that a specific signing operation (identified by a hash of
-    // WalletSigningOpId) has been signed by a specific user (identified by a hash of WalletAleoSigner/WalletEcdsaSigner)
-    struct SigningOpConfirmation {
-        wallet_signing_op_id_hash: field,
-        wallet_signer_hash: field,
-    }
-
     mapping pending_signing_ops: field => WalletSigningOp; // hash(WalletSigningOpId) => WalletSigningOp
 
     // hash(SigningOpConfirmation) => pending signing op round at which the signature was provided.
@@ -151,8 +163,6 @@ program multisig_core.aleo {
     mapping completed_signing_ops: field => u32; // hash(WalletSigningOpId) => block height when the signature that got us to the threshold was provided.
 
     mapping used_nonces: field => bool; // hash(WalletSigningOpIdNonce) => true for seen WalletSigningOpIdNonce
-
-    ///////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////
     // Privileged operations
@@ -429,24 +439,6 @@ program multisig_core.aleo {
     ///////////////////////////////////////////////////////////////////////////
     // Admin operations
     ///////////////////////////////////////////////////////////////////////////
-
-    const ADMIN_OP_INVALID: u8 = 0;
-    const ADMIN_OP_CHANGE_THRESHOLD: u8 = 1;
-    const ADMIN_OP_ADD_SIGNER: u8 = 2;
-    const ADMIN_OP_REMOVE_SIGNER: u8 = 3;
-
-    // An administrative operation
-    struct AdminOp {
-        op: u8,
-
-        // Only used for ADMIN_OP_CHANGE_THRESHOLD
-        threshold: u8,
-
-        // Only used for ADMIN_OP_ADD_SIGNER and ADMIN_OP_REMOVE_SIGNER.
-        // Only one of the two can be provided, the other has to be set to the zero address.
-        aleo_signer: address,
-        ecdsa_signer: [u8; 20],
-    }
 
     mapping pending_admin_ops: field => AdminOp; // hash(WalletSigningOpId) => AdminOp
 
