@@ -48,7 +48,6 @@ program multisig_wallet.aleo {
             token_id: CREDITS_RESERVED_TOKEN_ID,
         };
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
-
         let transfer_fut: Final = credits.aleo::transfer_public_as_signer(
             self.address,
             amount as u64,
