@@ -3,22 +3,6 @@
 // This contains a reusable implementation of an k-of-n multisig scheme that supports both Aleo
 // signers and ECDSA signers. For more details see the README.md file.
 
-const ADMIN_OP_INVALID: u8 = 0;
-const ADMIN_OP_CHANGE_THRESHOLD: u8 = 1;
-const ADMIN_OP_ADD_SIGNER: u8 = 2;
-const ADMIN_OP_REMOVE_SIGNER: u8 = 3;
-
-// An administrative operation
-struct AdminOp {
-    op: u8,
-    // Only used for ADMIN_OP_CHANGE_THRESHOLD
-    threshold: u8,
-    // Only used for ADMIN_OP_ADD_SIGNER and ADMIN_OP_REMOVE_SIGNER.
-    // Only one of the two can be provided, the other has to be set to the zero address.
-    aleo_signer: address,
-    ecdsa_signer: [u8; 20],
-}
-
 // The initial deployer, who is allowed to deploy the first edition of the program and call the init
 // transition.
 // When setting guard_create_wallet=true, this is also the only address that is allowed to create
@@ -32,41 +16,6 @@ const ALEO_ZERO_ADDRESS: address = aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
 const ETH_ZERO_ADDRESS: [u8; 20] = [0u8; 20];
 const MAX_BLOCK_HEIGHT: u32 = 4294967295; // 2**32 - 1
 
-// A unique identifier for a signing operation. Combining the user-provided signing_op_id
-// together with the wallet_id lets different wallets use the same signing_op_id across
-// different wallets.
-struct WalletSigningOpId {
-    wallet_id: address,
-    signing_op_id: field,
-}
-
-// A version of the above struct that includes a nonce.
-struct WalletSigningOpIdNonce {
-    wallet_id: address,
-    signing_op_id: field,
-    nonce: u64,
-}
-
-// Data stored for a signing operation
-struct WalletSigningOp {
-    // Number of valid signatures received so far.
-    confirmations: u8,
-    // The block height the signing op was initiated at.
-    initiated_at_block: u32,
-    // The last block.height we will accept signatures at.
-    // If set to MAX_BLOCK_HEIGHT, the signing operation will never expire.
-    expires_at_block: u32,
-    // Round number: This starts at 1 and increases every time signing is initiated using the same signing_op_id.
-    // (a previously-used signing_op_id can only be used again after expiration)
-    round: u32,
-}
-
-// A confirmation that a specific signing operation (identified by a hash of
-// WalletSigningOpId) has been signed by a specific user (identified by a hash of WalletAleoSigner/WalletEcdsaSigner)
-struct SigningOpConfirmation {
-    wallet_signing_op_id_hash: field,
-    wallet_signer_hash: field,
-}
 
 struct ProgramSettings {
     // Whether upgrades are allowed. This serves as an upgrade kill switch, preventing
@@ -150,15 +99,15 @@ program multisig_core.aleo {
     ///////////////////////////////////////////////////////////////////////////
     // Signing operations
     ///////////////////////////////////////////////////////////////////////////
-    mapping pending_signing_ops: field => WalletSigningOp; // hash(WalletSigningOpId) => WalletSigningOp
+    mapping pending_signing_ops: field => wallet_signing_op::WalletSigningOp; // hash(wallet_signing_op::WalletSigningOpId) => wallet_signing_op::WalletSigningOp
 
-    // hash(SigningOpConfirmation) => pending signing op round at which the signature was provided.
+    // hash(wallet_signing_op::SigningOpConfirmation) => pending signing op round at which the signature was provided.
     // By storing the round number we can ignore signatures from previous rounds.
     mapping pending_signing_confirmations: field => u32;
 
-    mapping completed_signing_ops: field => u32; // hash(WalletSigningOpId) => block height when the signature that got us to the threshold was provided.
+    mapping completed_signing_ops: field => u32; // hash(wallet_signing_op::WalletSigningOpId) => block height when the signature that got us to the threshold was provided.
 
-    mapping used_nonces: field => bool; // hash(WalletSigningOpIdNonce) => true for seen WalletSigningOpIdNonce
+    mapping used_nonces: field => bool; // hash(wallet_signing_op::WalletSigningOpIdNonce) => true for seen wallet_signing_op::WalletSigningOpIdNonce
 
     ///////////////////////////////////////////////////////////////////////////
     // Privileged operations
@@ -280,7 +229,7 @@ program multisig_core.aleo {
                     },
                 );
                 let wallet_signing_op_id_hash = BHP256::hash_to_field(
-                    WalletSigningOpId { wallet_id: self.address, signing_op_id: signing_op_id },
+                    wallet_signing_op::WalletSigningOpId { wallet_id: self.address, signing_op_id: signing_op_id },
                 );
                 assert(completed_signing_ops.contains(wallet_signing_op_id_hash));
             } else if (wallet_id == self.address) {
@@ -346,7 +295,7 @@ program multisig_core.aleo {
     ) -> (field, Final) {
         assert(block_expiration > 0);
         let wallet_signing_op_id_hash = BHP256::hash_to_field(
-            WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
+            wallet_signing_op::WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
         );
         let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
         let signer_hash = BHP256::hash_to_field(signer);
@@ -358,8 +307,8 @@ program multisig_core.aleo {
                     wallet_signing_op_id_hash,
                     signer_hash,
                     block_expiration,
-                    AdminOp {
-                        op: ADMIN_OP_INVALID,
+                    admin_op::AdminOp {
+                        op: admin_op::ADMIN_OP_INVALID,
                         threshold: 0,
                         aleo_signer: ALEO_ZERO_ADDRESS,
                         ecdsa_signer: ETH_ZERO_ADDRESS,
@@ -455,7 +404,7 @@ program multisig_core.aleo {
     ///////////////////////////////////////////////////////////////////////////
     // Admin operations
     ///////////////////////////////////////////////////////////////////////////
-    mapping pending_admin_ops: field => AdminOp; // hash(WalletSigningOpId) => AdminOp
+    mapping pending_admin_ops: field => admin_op::AdminOp; // hash(wallet_signing_op::WalletSigningOpId) => admin_op::AdminOp
 
     // @notice Initialize a new admin operation
     // @param wallet_id The wallet id the admin operation applies to
@@ -466,13 +415,13 @@ program multisig_core.aleo {
         public wallet_id: address,
         public signing_op_id: field,
         public block_expiration: u32,
-        admin_op: AdminOp,
+        admin_op: admin_op::AdminOp,
     ) -> (field, Final) {
         assert_valid_admin_op(admin_op);
 
         // NOTE: This is duplicated from initiate_signing_op
         let wallet_signing_op_id_hash = BHP256::hash_to_field(
-            WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
+            wallet_signing_op::WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
         );
         let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
         let signer_hash = BHP256::hash_to_field(signer);
@@ -497,11 +446,11 @@ program multisig_core.aleo {
     fn exec_admin_op(
         public wallet_id: address,
         public signing_op_id: field,
-        admin_op: AdminOp,
+        admin_op: admin_op::AdminOp,
     ) -> Final {
         assert_valid_admin_op(admin_op);
         let wallet_signing_op_id_hash = BHP256::hash_to_field(
-            WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
+            wallet_signing_op::WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
         );
         return final {
             // Ensure the wallet exists.
@@ -520,11 +469,11 @@ program multisig_core.aleo {
 
             // Execute the admin op
             let wallet_settings = wallets_map.get(wallet_id);
-            if (admin_op.op == ADMIN_OP_CHANGE_THRESHOLD) {
+            if (admin_op.op == admin_op::ADMIN_OP_CHANGE_THRESHOLD) {
                 assert(admin_op.threshold <= wallet_settings.num_signers);
                 wallets_map
                     .set(wallet_id,WalletSettings { threshold: admin_op.threshold, num_signers: wallet_settings.num_signers });
-            } else if (admin_op.op == ADMIN_OP_ADD_SIGNER) {
+            } else if (admin_op.op == admin_op::ADMIN_OP_ADD_SIGNER) {
                 let wallet_signer_hash = get_admin_op_wallet_signer_hash(wallet_id, admin_op);
 
                 assert(!signers_map.contains(wallet_signer_hash));
@@ -533,7 +482,7 @@ program multisig_core.aleo {
                     threshold: wallet_settings.threshold,
                     num_signers: wallet_settings.num_signers + 1,
                 });
-            } else if (admin_op.op == ADMIN_OP_REMOVE_SIGNER) {
+            } else if (admin_op.op == admin_op::ADMIN_OP_REMOVE_SIGNER) {
                 let wallet_signer_hash = get_admin_op_wallet_signer_hash(wallet_id, admin_op);
 
                 assert(signers_map.contains(wallet_signer_hash));
@@ -553,7 +502,7 @@ program multisig_core.aleo {
     ///////////////////////////////////////////////////////////////////////////
     // Helpers
     ///////////////////////////////////////////////////////////////////////////
-    // @notice Get the hash of a WalletSigningOpId
+    // @notice Get the hash of a wallet_signing_op::WalletSigningOpId
     // @param wallet_id The wallet ID
     // @param signing_op_id The signing op ID
     fn get_signing_op_id_hash(public wallet_id: address, public signing_op_id: field) -> field {
@@ -587,7 +536,7 @@ program multisig_core.aleo {
     fn assert_signing_completed(public wallet_id: address, public signing_op_id: field) -> Final {
         return final {
             let wallet_signing_op_id_hash = BHP256::hash_to_field(
-                WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
+                wallet_signing_op::WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
             );
             let signing_complete = completed_signing_ops.contains(wallet_signing_op_id_hash);
             assert(signing_complete);
@@ -609,13 +558,13 @@ program multisig_core.aleo {
 // NOTE: This method has some specific behavior for when it is called from the context of finalizing an admin operation.
 // Ideally we would have a different async function for finalizing the admin operation that calls this function,
 // but Leo doesn't currently lets us do this. This was deemed to be too much code to duplicate, so instead we
-// always pass an `admin_op` and use the `ADMIN_OP_INVALID` op to indicate that this is not an admin operation.
+// always pass an `admin_op` and use the `admin_op::ADMIN_OP_INVALID` op to indicate that this is not an admin operation.
 final fn finalize_initiate_signing_op(
     wallet_id: address,
     wallet_signing_op_id_hash: field,
     aleo_signer_hash: field,
     block_expiration: u32,
-    admin_op: AdminOp,
+    admin_op: admin_op::AdminOp,
 ) {
     // Ensure the wallet exists.
     assert(wallets_map.contains(wallet_id));
@@ -627,7 +576,7 @@ final fn finalize_initiate_signing_op(
     // Create a default pending signing op if one does not exist.
     if (!pending_signing_ops.contains(wallet_signing_op_id_hash)) {
         pending_signing_ops
-            .set(wallet_signing_op_id_hash,WalletSigningOp { confirmations: 0, initiated_at_block: 0, expires_at_block: 0, round: 0 });
+            .set(wallet_signing_op_id_hash,wallet_signing_op::WalletSigningOp { confirmations: 0, initiated_at_block: 0, expires_at_block: 0, round: 0 });
     }
     // Get existing pending signing op
     let existing_pending_op = pending_signing_ops.get(wallet_signing_op_id_hash);
@@ -641,14 +590,14 @@ final fn finalize_initiate_signing_op(
     // If signer is known then record it
     if (signers_map.contains(aleo_signer_hash)) {
         // Store the new pending signing op
-        pending_signing_ops.set(wallet_signing_op_id_hash, WalletSigningOp {
+        pending_signing_ops.set(wallet_signing_op_id_hash, wallet_signing_op::WalletSigningOp {
             confirmations: 1,
             initiated_at_block: block.height,
             expires_at_block: expires_at_block,
             round: round,
         });
         let confirmation_hash = BHP256::hash_to_field(
-            SigningOpConfirmation {
+            wallet_signing_op::SigningOpConfirmation {
                 wallet_signing_op_id_hash: wallet_signing_op_id_hash,
                 wallet_signer_hash: aleo_signer_hash,
             },
@@ -663,7 +612,7 @@ final fn finalize_initiate_signing_op(
             // NOTE: We never remove from pending_signing_ops to ensure wallet_signing_op_id_hash is always unique
         }
     } else {
-        pending_signing_ops.set(wallet_signing_op_id_hash, WalletSigningOp {
+        pending_signing_ops.set(wallet_signing_op_id_hash, wallet_signing_op::WalletSigningOp {
             confirmations: 0,
             initiated_at_block: block.height,
             expires_at_block: expires_at_block,
@@ -677,7 +626,7 @@ final fn finalize_initiate_signing_op(
         assert_eq(admin_op, existing_admin_op);
     } else {
         // Note that in cases where this finalize call is not an admin op, admin_op.op
-        // will be ADMIN_OP_INVALID, so no admin op can be executed.
+        // will be admin_op::ADMIN_OP_INVALID, so no admin op can be executed.
         // We always store a value here so that if a signing op gets re-used due to expiration,
         // it cannot be "upgraded" to an admin op or be re-purposed for a different admin op.
         pending_admin_ops.set(wallet_signing_op_id_hash, admin_op);
@@ -698,7 +647,7 @@ final fn finalize_sign(wallet_id: address, signing_op_id: field, signer_hash: fi
 
     // Signing op must exist and not be expired.
     let wallet_signing_op_id_hash = BHP256::hash_to_field(
-        WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
+        wallet_signing_op::WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
     );
     assert(pending_signing_ops.contains(wallet_signing_op_id_hash));
 
@@ -710,7 +659,7 @@ final fn finalize_sign(wallet_id: address, signing_op_id: field, signer_hash: fi
 
     // Track signer and ensure they cannot sign twice for the same operation.
     let confirmation_hash = BHP256::hash_to_field(
-        SigningOpConfirmation {
+        wallet_signing_op::SigningOpConfirmation {
             wallet_signing_op_id_hash: wallet_signing_op_id_hash,
             wallet_signer_hash: signer_hash,
         },
@@ -720,7 +669,7 @@ final fn finalize_sign(wallet_id: address, signing_op_id: field, signer_hash: fi
     pending_signing_confirmations.set(confirmation_hash, signing_op.round);
 
     // Increase confirmations
-    let new_signing_op = WalletSigningOp {
+    let new_signing_op = wallet_signing_op::WalletSigningOp {
         confirmations: signing_op.confirmations + 1,
         initiated_at_block: signing_op.initiated_at_block,
         expires_at_block: signing_op.expires_at_block,
@@ -764,14 +713,14 @@ final fn finalize_sign_ecdsa(
 
     // Nonce must be unique for this wallet_id/signing_op_id
     let nonce_hash = BHP256::hash_to_field(
-        WalletSigningOpIdNonce { wallet_id: wallet_id, signing_op_id: signing_op_id, nonce: nonce },
+        wallet_signing_op::WalletSigningOpIdNonce { wallet_id: wallet_id, signing_op_id: signing_op_id, nonce: nonce },
     );
     assert(!used_nonces.contains(nonce_hash));
     used_nonces.set(nonce_hash, true);
 
     // Signing op must exist and not be expired.
     let wallet_signing_op_id_hash = BHP256::hash_to_field(
-        WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
+        wallet_signing_op::WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
     );
     assert(pending_signing_ops.contains(wallet_signing_op_id_hash));
 
@@ -782,7 +731,7 @@ final fn finalize_sign_ecdsa(
     assert(round == 0u32 || round == signing_op.round);
 
     // Signature must be valid.
-    // NOTE: The signature is over the hash of a `WalletSigningOpIdNonce`, capturing
+    // NOTE: The signature is over the hash of a `wallet_signing_op::WalletSigningOpIdNonce`, capturing
     // the wallet_id, signing_op_id and nonce.
     let hash_bits: [bool; 253] = Serialize::to_bits_raw(nonce_hash);
     let padded_bits: [bool; 256] = [false; 256];
@@ -795,7 +744,7 @@ final fn finalize_sign_ecdsa(
 
     // Track signer and ensure they cannot sign twice for the same operation.
     let confirmation_hash = BHP256::hash_to_field(
-        SigningOpConfirmation {
+        wallet_signing_op::SigningOpConfirmation {
             wallet_signing_op_id_hash: wallet_signing_op_id_hash,
             wallet_signer_hash: signer_hash,
         },
@@ -805,7 +754,7 @@ final fn finalize_sign_ecdsa(
     pending_signing_confirmations.set(confirmation_hash, signing_op.round);
 
     // Increase confirmations
-    let new_signing_op = WalletSigningOp {
+    let new_signing_op = wallet_signing_op::WalletSigningOp {
         confirmations: signing_op.confirmations + 1,
         initiated_at_block: signing_op.initiated_at_block,
         expires_at_block: signing_op.expires_at_block,
@@ -829,11 +778,11 @@ final fn finalize_sign_ecdsa(
 // Admin operations
 ///////////////////////////////////////////////////////////////////////////
 
-// @notice A helper for hashing an AdminOp.
+// @notice A helper for hashing an admin_op::AdminOp.
 // @param wallet_id The wallet ID.
 // @param admin_op The admin operation.
-fn get_admin_op_wallet_signer_hash(wallet_id: address, admin_op: AdminOp) -> field {
-    assert(admin_op.op == ADMIN_OP_ADD_SIGNER || admin_op.op == ADMIN_OP_REMOVE_SIGNER);
+fn get_admin_op_wallet_signer_hash(wallet_id: address, admin_op: admin_op::AdminOp) -> field {
+    assert(admin_op.op == admin_op::ADMIN_OP_ADD_SIGNER || admin_op.op == admin_op::ADMIN_OP_REMOVE_SIGNER);
 
     let wallet_signer_hash = 0field;
     if (admin_op.aleo_signer != ALEO_ZERO_ADDRESS) {
@@ -852,14 +801,14 @@ fn get_admin_op_wallet_signer_hash(wallet_id: address, admin_op: AdminOp) -> fie
     return wallet_signer_hash;
 }
 
-// @notice A helper for ensuring an AdminOp is valid.
+// @notice A helper for ensuring an admin_op::AdminOp is valid.
 // @param admin_op The admin operation to validate.
-fn assert_valid_admin_op(admin_op: AdminOp) {
-    if (admin_op.op == ADMIN_OP_CHANGE_THRESHOLD) {
+fn assert_valid_admin_op(admin_op: admin_op::AdminOp) {
+    if (admin_op.op == admin_op::ADMIN_OP_CHANGE_THRESHOLD) {
         assert_neq(admin_op.threshold, 0u8);
         assert_eq(admin_op.aleo_signer, ALEO_ZERO_ADDRESS);
         assert_eq(admin_op.ecdsa_signer, ETH_ZERO_ADDRESS);
-    } else if (admin_op.op == ADMIN_OP_ADD_SIGNER || admin_op.op == ADMIN_OP_REMOVE_SIGNER) {
+    } else if (admin_op.op == admin_op::ADMIN_OP_ADD_SIGNER || admin_op.op == admin_op::ADMIN_OP_REMOVE_SIGNER) {
         assert_eq(admin_op.threshold, 0u8);
         if (admin_op.aleo_signer == ALEO_ZERO_ADDRESS && admin_op.ecdsa_signer == ETH_ZERO_ADDRESS) {
             assert(false);
@@ -877,19 +826,19 @@ fn assert_valid_admin_op(admin_op: AdminOp) {
 // Helpers
 ///////////////////////////////////////////////////////////////////////////
 
-// @notice Check if a given WalletSigningOp has expired at a given block height
-// @param signing_op The WalletSigningOp to check
+// @notice Check if a given wallet_signing_op::WalletSigningOp has expired at a given block height
+// @param signing_op The wallet_signing_op::WalletSigningOp to check
 // @param block_height The block height to check against
-fn signing_op_expired(signing_op: WalletSigningOp, block_height: u32) -> bool {
+fn signing_op_expired(signing_op: wallet_signing_op::WalletSigningOp, block_height: u32) -> bool {
     return signing_op.expires_at_block < block_height;
 }
 
-// @notice Get the hash of a WalletSigningOpId
+// @notice Get the hash of a wallet_signing_op::WalletSigningOpId
 // @param wallet_id The wallet ID
 // @param signing_op_id The signing op ID
 fn get_signing_op_id_hash_fn(wallet_id: address, signing_op_id: field) -> field {
     return BHP256::hash_to_field(
-        WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
+        wallet_signing_op::WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
     );
 }
 
