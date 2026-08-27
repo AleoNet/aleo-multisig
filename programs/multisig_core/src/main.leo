@@ -6,7 +6,7 @@ program multisig_core.aleo {
     // The initial deployer, who is allowed to deploy the first edition of the program and call the init
     // transition.
     // When setting guard_create_wallet=true, this is also the only address that is allowed to create
-    // the `self.address` "guard wallet".
+    // the `std::ctx::address()` "guard wallet".
     //
     // This address belongs to the first standard Aleo test account.
     // IMPORTANT! Remember to change this before deployment!
@@ -18,15 +18,15 @@ program multisig_core.aleo {
 
     @custom
     constructor() {
-        if (self.edition == 0u16) {
-            assert_eq(self.program_owner, DEPLOYER_ADDRESS);
+        if (std::ctx::edition() == 0u16) {
+            assert_eq(std::ctx::program_owner(), DEPLOYER_ADDRESS);
         } else {
 
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
 
             assert(program_settings.allow_upgrades);
-            assert_eq(self.program_owner, program_settings.upgrader_address);
+            assert_eq(std::ctx::program_owner(), program_settings.upgrader_address);
         }
     }
 
@@ -163,7 +163,7 @@ program multisig_core.aleo {
     // @param guard_create_wallet Whether to guard the creation of new wallets with
     //                            a multisig operation
     fn init(upgrader_address: address, guard_create_wallet: bool) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
 
         return final {
             assert_eq(caller, DEPLOYER_ADDRESS);
@@ -179,7 +179,7 @@ program multisig_core.aleo {
 
     // @notice Disallow any future upgrades
     fn disallow_upgrades() -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
@@ -197,7 +197,7 @@ program multisig_core.aleo {
     // @notice Change the upgrader_address to a new address
     // @param new_upgrader_address The new upgrader address
     fn set_upgrader_address(new_upgrader_address: address) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
@@ -249,7 +249,7 @@ program multisig_core.aleo {
             BHP256::hash_to_field(WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ecdsa_signers[3] }),
         ];
 
-        let caller = self.caller;
+        let caller = std::ctx::caller();
 
         return final {
             // Ensure we are initialized and get program settings.
@@ -257,20 +257,20 @@ program multisig_core.aleo {
             let program_settings = program_settings_map.get(true);
 
             // We might require a multisig operation for creating new wallets (unless this is the special wallet that manages that).
-            if (program_settings.guard_create_wallet && wallet_id != self.address) {
+            if (program_settings.guard_create_wallet && wallet_id != std::ctx::address()) {
                 let signing_op_id = BHP256::hash_to_field(GuardedCreateWalletOp {
                     wallet_id: wallet_id,
                     threshold: threshold,
                     aleo_signers: aleo_signers,
                     ecdsa_signers: ecdsa_signers,
                 });
-                let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: self.address, signing_op_id: signing_op_id });
+                let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: std::ctx::address(), signing_op_id: signing_op_id });
                 assert(completed_signing_ops.contains(wallet_signing_op_id_hash));
-            } else if (wallet_id == self.address) {
+            } else if (wallet_id == std::ctx::address()) {
                 // Only the deployer can create the special wallet that manages new wallet creation.
                 // Note that right now we do not allow changing guard_create_wallet after it has been set in `init`.
                 // If at some point this changes, we will likely need to change this assertion as well.
-                // At the moment we do not allow the special `self.address` wallet_id to be used regardless of whether
+                // At the moment we do not allow the special `std::ctx::address()` wallet_id to be used regardless of whether
                 // guard_create_wallet is enabled or not.
                 assert_eq(caller, DEPLOYER_ADDRESS);
             }
@@ -328,7 +328,7 @@ program multisig_core.aleo {
         assert(block_expiration > 0);
         let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id });
 
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
 
          return (wallet_signing_op_id_hash, final {
@@ -360,7 +360,7 @@ program multisig_core.aleo {
     // @param wallet_id The wallet id the signing operation belongs to
     // @param signing_op_id The signing operation id
     fn sign(public wallet_id: address, public signing_op_id: field) -> Final {
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
 
         return final {
@@ -375,7 +375,7 @@ program multisig_core.aleo {
     // @param signing_op_id The signing operation id
     // @param round The round to sign for
     fn sign_for_round(public wallet_id: address, public signing_op_id: field, public round: u32) -> Final {
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
 
         return final {
@@ -460,7 +460,7 @@ program multisig_core.aleo {
 
         // NOTE: This is duplicated from initiate_signing_op
         let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id });
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
 
         return (wallet_signing_op_id_hash, final {
