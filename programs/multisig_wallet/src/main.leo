@@ -48,7 +48,7 @@ program multisig_wallet.aleo {
         let balance_key: BalanceKey = BalanceKey { wallet_id: wallet_id, token_id: CREDITS_RESERVED_TOKEN_ID };
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
 
-        let transfer_fut: Final = credits.aleo::transfer_public_as_signer(self.address, amount as u64);
+        let transfer_fut: Final = credits.aleo::transfer_public_as_signer(std::ctx::addr(), amount as u64);
         return final {
             fin_deposit_public(balance_key_hash, amount, transfer_fut);
         };
@@ -60,7 +60,7 @@ program multisig_wallet.aleo {
         let balance_key: BalanceKey = BalanceKey { wallet_id: wallet_id, token_id: token_id };
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
 
-        let transfer_fut: Final = token_registry.aleo::transfer_public_as_signer(token_id, self.address, amount);
+        let transfer_fut: Final = token_registry.aleo::transfer_public_as_signer(token_id, std::ctx::addr(), amount);
         return final {
             fin_deposit_public(balance_key_hash, amount, transfer_fut);
         };
@@ -121,7 +121,7 @@ program multisig_wallet.aleo {
         let balance_key: BalanceKey = BalanceKey { wallet_id: wallet_id, token_id: CREDITS_RESERVED_TOKEN_ID };
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
 
-        let (remaining_credits, transfer_fut) = credits.aleo::transfer_private_to_public(credits, self.address, amount as u64);
+        let (remaining_credits, transfer_fut) = credits.aleo::transfer_private_to_public(credits, std::ctx::addr(), amount as u64);
         return (remaining_credits, final {
             f_deposit_private(balance_key_hash, amount, transfer_fut);
         });
@@ -133,7 +133,7 @@ program multisig_wallet.aleo {
         let balance_key: BalanceKey = BalanceKey { wallet_id: wallet_id, token_id: token.token_id};
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
 
-        let (remaining_token, transfer_fut) = token_registry.aleo::transfer_private_to_public(self.address, amount, token);
+        let (remaining_token, transfer_fut) = token_registry.aleo::transfer_private_to_public(std::ctx::addr(), amount, token);
         return (remaining_token, final {
             f_deposit_private(balance_key_hash, amount, transfer_fut);
         });
@@ -166,7 +166,7 @@ program multisig_wallet.aleo {
         let details_hash = BHP256::hash_to_field(details);
 
         let execute_record = ExecutePrivateTransfer {
-            owner: self.signer,
+            owner: std::ctx::signer(),
             details: details,
         };
 
