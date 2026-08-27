@@ -15,6 +15,14 @@ struct BalanceKey {
     token_id: field,
 }
 
+// Details that we hash into the private_transfers map.
+// Never stored directly on the chain.
+struct PrivateTransferDetails {
+    wallet_id: address,
+    signing_op_id: field,
+    transfer: Transfer,
+}
+
 program multisig_wallet.aleo {
     mapping balances: field => u128; // hash_to_field(BalanceKey) => u128;
     mapping pending_public_transfers: field => Transfer; // hash(WalletSigningOpId) => Transfer
@@ -135,8 +143,6 @@ program multisig_wallet.aleo {
     // private transfer out of the wallet
     ///////////////////////////////////////////////////////////////////////////
 
-    // Details that we hash into the private_transfers map.
-    // Never stored directly on the chain.
     // Aside from the transaction initiator (the executor), no one knows the transfer details as they are
     // only stored in the ExecutePrivateTransfer record.
     // However, we must have a way for signers to confirm they are signing the transaction they think they are signing.
