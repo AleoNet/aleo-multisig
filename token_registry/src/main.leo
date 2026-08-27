@@ -1,5 +1,40 @@
 import credits.aleo;
 
+struct TokenMetadata {
+  token_id: field,
+  name: u128, // ASCII text represented in bits, and the u128 value of the bitstring
+  symbol: u128, // ASCII text represented in bits, and the u128 value of the bitstring
+  decimals: u8,
+  supply: u128,
+  max_supply: u128,
+  admin: address,
+  external_authorization_required: bool, // whether or not this token requires authorization from an external program before transferring
+  external_authorization_party: address
+}
+
+struct TokenOwner {
+  account: address,
+  token_id: field
+}
+
+struct Balance {
+  token_id: field,
+  account: address,
+  balance: u128,
+  authorized_until: u32
+}
+
+struct Allowance {
+  account: address,
+  spender: address,
+  token_id: field
+}
+
+const CREDITS_RESERVED_TOKEN_ID: field = 3443843282313283355522573239085696902919850365217539366784739393210722344986field;
+const MINTER_ROLE: u8 = 1u8;
+const BURNER_ROLE: u8 = 2u8;
+const SUPPLY_MANAGER_ROLE: u8 = 3u8;
+
 // The 'mtsp' program.
 program token_registry.aleo {
   record Token {
@@ -10,45 +45,11 @@ program token_registry.aleo {
     authorized_until: u32
   }
 
-  struct TokenMetadata {
-    token_id: field,
-    name: u128, // ASCII text represented in bits, and the u128 value of the bitstring
-    symbol: u128, // ASCII text represented in bits, and the u128 value of the bitstring
-    decimals: u8,
-    supply: u128,
-    max_supply: u128,
-    admin: address,
-    external_authorization_required: bool, // whether or not this token requires authorization from an external program before transferring
-    external_authorization_party: address
-  }
-
-  struct TokenOwner {
-    account: address,
-    token_id: field
-  }
-
-  struct Balance {
-    token_id: field,
-    account: address,
-    balance: u128,
-    authorized_until: u32
-  }
-
-  struct Allowance {
-    account: address,
-    spender: address,
-    token_id: field
-  }
-
-  const CREDITS_RESERVED_TOKEN_ID: field = 3443843282313283355522573239085696902919850365217539366784739393210722344986field;
   mapping registered_tokens: field => TokenMetadata;
   mapping balances: field => Balance; // hash(token_id, account) => Balance
   mapping authorized_balances: field => Balance; // hash(token_id, account) => Balance
   mapping allowances: field => u128; // hash(token_id, account, spender) => Allowance
 
-  const MINTER_ROLE: u8 = 1u8;
-  const BURNER_ROLE: u8 = 2u8;
-  const SUPPLY_MANAGER_ROLE: u8 = 3u8;
   mapping roles: field => u8; // hash(token_id, account) => role
 
   //@noupgrade

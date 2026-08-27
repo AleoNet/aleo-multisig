@@ -1,5 +1,10 @@
 import multisig_core.aleo;
 
+struct ChecksumEdition {
+    checksum: [u8; 32],
+    edition: u16,
+}
+
 // An example showing how to use the multisig wallet for gating program upgrades.
 // In order to try out this example, take the following steps:
 // 1. Start a devnode: $LEO devnode start
@@ -10,11 +15,6 @@ import multisig_core.aleo;
 // 6. Do a multisig operation followed by an upgrade: ./exec_sign_upgrade.sh (note that the program checksum is hardcoded, if you edit the program
 //    you will need to update the checksum in the script)
 program test_upgrades.aleo {
-    struct ChecksumEdition {
-        checksum: [u8; 32],
-        edition: u16,
-    }
-
     // A helper for calculating a signing_op_id from the program's checksum and edition.
     // By deriving the signing_op_id from both we ensure that downgrades cannot take place.
     transition get_signing_op_id_for_deploy(checksum: [u8; 32], edition: u16) -> field {

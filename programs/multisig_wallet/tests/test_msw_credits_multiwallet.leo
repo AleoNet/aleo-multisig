@@ -2,11 +2,11 @@
 import msw_credits_multiwallet.aleo;
 import token_registry.aleo;
 
+const TEST_TOKEN_ID: field = 1751493913335802797273486270793650302076377624243810059080883537084141842600field;
+
+const ADDR1: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
+
 program test_msw_credits_multiwallet.aleo {
-    const TEST_TOKEN_ID: field = 1751493913335802797273486270793650302076377624243810059080883537084141842600field;
-
-    const ADDR1: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
-
     @test(private_key="APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH") // ADDR1
     script test_setup() {
         let f1 = token_registry.aleo/initialize();

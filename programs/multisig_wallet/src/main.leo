@@ -2,20 +2,20 @@ import multisig_core.aleo;
 import credits.aleo;
 import token_registry.aleo;
 
+const CREDITS_RESERVED_TOKEN_ID: field = 3443843282313283355522573239085696902919850365217539366784739393210722344986field;
+
+struct Transfer {
+    token_id: field,
+    destination: address,
+    amount: u128,
+}
+
+struct BalanceKey {
+    wallet_id: address,
+    token_id: field,
+}
+
 program multisig_wallet.aleo {
-    const CREDITS_RESERVED_TOKEN_ID: field = 3443843282313283355522573239085696902919850365217539366784739393210722344986field;
-
-    struct Transfer {
-        token_id: field,
-        destination: address,
-        amount: u128,
-    }
-
-    struct BalanceKey {
-        wallet_id: address,
-        token_id: field,
-    }
-
     mapping balances: field => u128; // hash_to_field(BalanceKey) => u128;
     mapping pending_public_transfers: field => Transfer; // hash(WalletSigningOpId) => Transfer
 
@@ -137,12 +137,6 @@ program multisig_wallet.aleo {
 
     // Details that we hash into the private_transfers map.
     // Never stored directly on the chain.
-    struct PrivateTransferDetails {
-        wallet_id: address,
-        signing_op_id: field,
-        transfer: Transfer,
-    }
-
     // Aside from the transaction initiator (the executor), no one knows the transfer details as they are
     // only stored in the ExecutePrivateTransfer record.
     // However, we must have a way for signers to confirm they are signing the transaction they think they are signing.
