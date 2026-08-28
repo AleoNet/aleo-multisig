@@ -5,6 +5,11 @@ struct ChecksumEdition {
     edition: u16,
 }
 
+struct WalletSigningOpId {
+    wallet_id: address,
+    signing_op_id: field,
+}
+
 // An example showing how to use the multisig wallet for gating program upgrades.
 // In order to try out this example, take the following steps:
 // 1. Start a devnode: $LEO devnode start
@@ -17,23 +22,25 @@ struct ChecksumEdition {
 program test_upgrades.aleo {
     // A helper for calculating a signing_op_id from the program's checksum and edition.
     // By deriving the signing_op_id from both we ensure that downgrades cannot take place.
-    transition get_signing_op_id_for_deploy(checksum: [u8; 32], edition: u16) -> field {
+    fn get_signing_op_id_for_deploy(checksum: [u8; 32], edition: u16) -> field {
         return BHP256::hash_to_field(ChecksumEdition { checksum: checksum, edition: edition });
     }
 
     @custom
-    async constructor() {
+    constructor() {
         // Only require multisig for upgrades - initial deployment has no checks.
-        if self.edition > 0u16 {
-            let signing_op_id = BHP256::hash_to_field(ChecksumEdition { checksum: self.checksum, edition: self.edition });
+        if std::ctx::edition() > 0u16 {
+            let signing_op_id = BHP256::hash_to_field(ChecksumEdition { checksum: std::ctx::checksum(), edition: std::ctx::edition() });
 
-            let wallet_signing_op_id_hash = BHP256::hash_to_field(WalletSigningOpId { wallet_id: self.address, signing_op_id: signing_op_id });
-            let signing_complete = multisig_core.aleo/completed_signing_ops.contains(wallet_signing_op_id_hash);
+            let wallet_signing_op_id_hash = BHP256::hash_to_field(
+                WalletSigningOpId { wallet_id: std::ctx::addr(), signing_op_id: signing_op_id },
+            );
+            let signing_complete = multisig_core.aleo::completed_signing_ops.contains(wallet_signing_op_id_hash);
             assert(signing_complete);
         }
     }
 
-    transition main(public a: u32, b: u32) -> u32 {
+    fn main(public a: u32, b: u32) -> u32 {
         let c: u32 = a + b;
         return c;
     }
