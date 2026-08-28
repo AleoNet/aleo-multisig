@@ -108,7 +108,7 @@ program multisig_wallet.aleo {
 
                 // NOTE: We do not care if there is an existing entry in public_transfers for the same signing_op_id_hash because
                 // initiate_signing_op will only succeed if this is a new signing operation. There might be an existing entry for
-                // an expired sigining operation, which we are fine overwriting.
+                // an expired signing operation, which we are fine overwriting.
                 pending_public_transfers.set(final_wallet_op_hash, transfer);
 
                 init_signing_op_fut.run();
@@ -272,7 +272,7 @@ program multisig_wallet.aleo {
                 // NOTE: For simplicity's sake we do not check the current balance. The balance gets verified during the execution phase.
                 // NOTE: We do not care if there is an existing entry in private_transfers for the same signing_op_id_hash because
                 // initiate_signing_op will only succeed if this is a new signing operation. There might be an existing entry for
-                // an expired sigining operation, which we are fine overwriting.
+                // an expired signing operation, which we are fine overwriting.
                 private_transfers.set(final_wallet_op_hash, details_hash);
 
                 init_signing_op_fut.run();
