@@ -2,7 +2,7 @@
   "program": "test_upgrades.aleo",
   "version": "0.1.0",
   "description": "",
-  "leo": "3.4.0",
+  "leo": "4.4.2",
   "license": "GPL",
   "dependencies": [
     {

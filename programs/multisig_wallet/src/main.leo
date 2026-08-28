@@ -49,7 +49,7 @@ program multisig_wallet.aleo {
         };
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
         let transfer_fut: Final = credits.aleo::transfer_public_as_signer(
-            self.address,
+            std::ctx::addr(),
             amount as u64,
         );
         return final { fin_deposit_public(balance_key_hash, amount, transfer_fut); };
@@ -66,7 +66,7 @@ program multisig_wallet.aleo {
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
         let transfer_fut: Final = token_registry.aleo::transfer_public_as_signer(
             token_id,
-            self.address,
+            std::ctx::addr(),
             amount,
         );
         return final { fin_deposit_public(balance_key_hash, amount, transfer_fut); };
@@ -84,15 +84,22 @@ program multisig_wallet.aleo {
         public block_expiration: u32,
         transfer: Transfer,
     ) -> (field, Final) {
-        let (wallet_signing_op_id_hash, init_signing_op_fut) = multisig_core.aleo::initiate_signing_op(
+        // Recompute the hash from the inputs instead of using the value returned alongside the
+        // external Final. The latter is conservatively treated as tainted by the CEI analyzer.
+        let final_wallet_op_hash = multisig_core.aleo::get_signing_op_id_hash_fn(
             wallet_id,
             signing_op_id,
-            block_expiration,
         );
+        let (wallet_signing_op_id_hash, init_signing_op_fut) =
+            multisig_core.aleo::initiate_signing_op(
+                wallet_id,
+                signing_op_id,
+                block_expiration,
+            );
+        assert_eq(wallet_signing_op_id_hash, final_wallet_op_hash);
         return (
-            wallet_signing_op_id_hash,
+            final_wallet_op_hash,
             final {
-                init_signing_op_fut.run();
                 let balance_key_hash: field = BHP256::hash_to_field(
                     BalanceKey { wallet_id: wallet_id, token_id: transfer.token_id },
                 );
@@ -101,8 +108,10 @@ program multisig_wallet.aleo {
 
                 // NOTE: We do not care if there is an existing entry in public_transfers for the same signing_op_id_hash because
                 // initiate_signing_op will only succeed if this is a new signing operation. There might be an existing entry for
-                // an expired sigining operation, which we are fine overwriting.
-                pending_public_transfers.set(wallet_signing_op_id_hash, transfer);
+                // an expired signing operation, which we are fine overwriting.
+                pending_public_transfers.set(final_wallet_op_hash, transfer);
+
+                init_signing_op_fut.run();
             },
         );
     }
@@ -183,7 +192,7 @@ program multisig_wallet.aleo {
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
         let (remaining_credits, transfer_fut) = credits.aleo::transfer_private_to_public(
             credits,
-            self.address,
+            std::ctx::addr(),
             amount as u64,
         );
         return (
@@ -203,7 +212,7 @@ program multisig_wallet.aleo {
         let balance_key: BalanceKey = BalanceKey { wallet_id: wallet_id, token_id: token.token_id };
         let balance_key_hash: field = BHP256::hash_to_field(balance_key);
         let (remaining_token, transfer_fut) = token_registry.aleo::transfer_private_to_public(
-            self.address,
+            std::ctx::addr(),
             amount,
             token,
         );
@@ -236,29 +245,37 @@ program multisig_wallet.aleo {
         public block_expiration: u32,
         transfer: Transfer,
     ) -> (field, ExecutePrivateTransfer, Final) {
-        let (wallet_signing_op_id_hash, init_signing_op_fut) = multisig_core.aleo::initiate_signing_op(
+        // Recompute the hash from the inputs instead of using the value returned alongside the
+        // external Final. The latter is conservatively treated as tainted by the CEI analyzer.
+        let final_wallet_op_hash = multisig_core.aleo::get_signing_op_id_hash_fn(
             wallet_id,
             signing_op_id,
-            block_expiration,
         );
+        let (wallet_signing_op_id_hash, init_signing_op_fut) =
+            multisig_core.aleo::initiate_signing_op(
+                wallet_id,
+                signing_op_id,
+                block_expiration,
+            );
+        assert_eq(wallet_signing_op_id_hash, final_wallet_op_hash);
         let details = PrivateTransferDetails {
             wallet_id: wallet_id,
             signing_op_id: signing_op_id,
             transfer: transfer,
         };
         let details_hash = BHP256::hash_to_field(details);
-        let execute_record = ExecutePrivateTransfer { owner: self.signer, details: details };
+        let execute_record = ExecutePrivateTransfer { owner: std::ctx::signer(), details: details };
         return (
-            wallet_signing_op_id_hash,
+            final_wallet_op_hash,
             execute_record,
             final {
                 // NOTE: For simplicity's sake we do not check the current balance. The balance gets verified during the execution phase.
-                init_signing_op_fut.run();
-
                 // NOTE: We do not care if there is an existing entry in private_transfers for the same signing_op_id_hash because
                 // initiate_signing_op will only succeed if this is a new signing operation. There might be an existing entry for
-                // an expired sigining operation, which we are fine overwriting.
-                private_transfers.set(wallet_signing_op_id_hash, details_hash);
+                // an expired signing operation, which we are fine overwriting.
+                private_transfers.set(final_wallet_op_hash, details_hash);
+
+                init_signing_op_fut.run();
             },
         );
     }
@@ -367,8 +384,6 @@ final fn fin_exec_public_transfer(
     let balance_key_hash: field = BHP256::hash_to_field(
         BalanceKey { wallet_id: wallet_id, token_id: transfer.token_id },
     );
-    // Signing must be completed.
-    signing_complete_fut.run();
 
     // Must have enough balance.
     let current_balance: u128 = Mapping::get(balances, balance_key_hash);
@@ -382,10 +397,12 @@ final fn fin_exec_public_transfer(
     let new_balance: u128 = current_balance - transfer.amount;
     Mapping::set(balances, balance_key_hash, new_balance);
 
-    transfer_fut.run();
-
     // Removing is crucial, otherwise the operation can be executed twice.
     pending_public_transfers.remove(wallet_signing_op_id_hash);
+
+    // Interactions run after all local checks and effects.
+    signing_complete_fut.run();
+    transfer_fut.run();
 }
 
 final fn f_deposit_private(balance_key_hash: field, amount: u128, transfer_fut: Final) {
@@ -404,9 +421,6 @@ final fn fin_exec_private_transfer(
     signing_complete_fut: Final,
     transfer_fut: Final,
 ) {
-    // Signing must be completed.
-    signing_complete_fut.run();
-
     // Must have enough balance.
     let current_balance: u128 = Mapping::get(balances, balance_key_hash);
     assert_eq(current_balance >= amount, true);
@@ -420,5 +434,7 @@ final fn fin_exec_private_transfer(
     let new_balance: u128 = current_balance - amount;
     Mapping::set(balances, balance_key_hash, new_balance);
 
+    // Interactions run after all local checks and effects.
+    signing_complete_fut.run();
     transfer_fut.run();
 }

@@ -2,7 +2,7 @@
   "program": "multisig_core.aleo",
   "version": "0.1.0",
   "description": "",
-  "leo": "4.3.0",
+  "leo": "4.4.2",
   "license": "GPL",
   "dependencies": null,
   "dev_dependencies": null

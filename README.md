@@ -78,7 +78,7 @@ In addition to the `multisig_wallet.aleo` program, we provide a `test_upgrades.a
 ## Development Setup
 
 ### Prerequisites
-- `leo` CLI for program compilation and deployment. **The code here is known to work with `leo 4.0.2`.**
+- `leo` CLI for program compilation and deployment. **The code here is known to work with `leo 4.4.2`.**
 - Node.js 22+ for running tests
 - Local devnode - see https://github.com/ProvableHQ/aleo-devnode/. **The code here is known to test successfully using v0.1.0.**
 
@@ -89,7 +89,7 @@ In addition to the `multisig_wallet.aleo` program, we provide a `test_upgrades.a
 NETWORK=testnet
 PRIVATE_KEY=APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH
 ENDPOINT=http://localhost:3030
-CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10,11,12,13
+CONSENSUS_VERSION_HEIGHTS=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18
 ```
 
 ### Deploying the programs

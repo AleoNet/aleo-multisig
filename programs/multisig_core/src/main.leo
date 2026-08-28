@@ -22,7 +22,7 @@ struct AdminOp {
 // The initial deployer, who is allowed to deploy the first edition of the program and call the init
 // transition.
 // When setting guard_create_wallet=true, this is also the only address that is allowed to create
-// the `self.address` "guard wallet".
+// the `std::ctx::addr()` "guard wallet".
 //
 // This address belongs to the first standard Aleo test account.
 // IMPORTANT! Remember to change this before deployment!
@@ -53,7 +53,7 @@ struct WalletSigningOp {
     confirmations: u8,
     // The block height the signing op was initiated at.
     initiated_at_block: u32,
-    // The last block.height we will accept signatures at.
+    // The last block height we will accept signatures at.
     // If set to MAX_BLOCK_HEIGHT, the signing operation will never expire.
     expires_at_block: u32,
     // Round number: This starts at 1 and increases every time signing is initiated using the same signing_op_id.
@@ -122,14 +122,14 @@ struct WalletSettings {
 program multisig_core.aleo {
     @custom
     constructor() {
-        if (self.edition == 0u16) {
-            assert_eq(self.program_owner, DEPLOYER_ADDRESS);
+        if (std::ctx::edition() == 0u16) {
+            assert_eq(std::ctx::program_owner(), DEPLOYER_ADDRESS);
         } else {
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
 
             assert(program_settings.allow_upgrades);
-            assert_eq(self.program_owner, program_settings.upgrader_address);
+            assert_eq(std::ctx::program_owner(), program_settings.upgrader_address);
         }
     }
 
@@ -168,7 +168,7 @@ program multisig_core.aleo {
     // @param guard_create_wallet Whether to guard the creation of new wallets with
     //                            a multisig operation
     fn init(upgrader_address: address, guard_create_wallet: bool) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             assert_eq(caller, DEPLOYER_ADDRESS);
 
@@ -183,7 +183,7 @@ program multisig_core.aleo {
 
     // @notice Disallow any future upgrades
     fn disallow_upgrades() -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
@@ -200,7 +200,7 @@ program multisig_core.aleo {
     // @notice Change the upgrader_address to a new address
     // @param new_upgrader_address The new upgrader address
     fn set_upgrader_address(new_upgrader_address: address) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
@@ -263,14 +263,14 @@ program multisig_core.aleo {
                 WalletEcdsaSigner { wallet_id: wallet_id, ecdsa_signer: ecdsa_signers[3] },
             ),
         ];
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             // Ensure we are initialized and get program settings.
             assert(program_settings_map.contains(true));
             let program_settings = program_settings_map.get(true);
 
             // We might require a multisig operation for creating new wallets (unless this is the special wallet that manages that).
-            if (program_settings.guard_create_wallet && wallet_id != self.address) {
+            if (program_settings.guard_create_wallet && wallet_id != std::ctx::addr()) {
                 let signing_op_id = BHP256::hash_to_field(
                     GuardedCreateWalletOp {
                         wallet_id: wallet_id,
@@ -280,14 +280,14 @@ program multisig_core.aleo {
                     },
                 );
                 let wallet_signing_op_id_hash = BHP256::hash_to_field(
-                    WalletSigningOpId { wallet_id: self.address, signing_op_id: signing_op_id },
+                    WalletSigningOpId { wallet_id: std::ctx::addr(), signing_op_id: signing_op_id },
                 );
                 assert(completed_signing_ops.contains(wallet_signing_op_id_hash));
-            } else if (wallet_id == self.address) {
+            } else if (wallet_id == std::ctx::addr()) {
                 // Only the deployer can create the special wallet that manages new wallet creation.
                 // Note that right now we do not allow changing guard_create_wallet after it has been set in `init`.
                 // If at some point this changes, we will likely need to change this assertion as well.
-                // At the moment we do not allow the special `self.address` wallet_id to be used regardless of whether
+                // At the moment we do not allow the special `std::ctx::addr()` wallet_id to be used regardless of whether
                 // guard_create_wallet is enabled or not.
                 assert_eq(caller, DEPLOYER_ADDRESS);
             }
@@ -348,7 +348,7 @@ program multisig_core.aleo {
         let wallet_signing_op_id_hash = BHP256::hash_to_field(
             WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
         );
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
         return (
             wallet_signing_op_id_hash,
@@ -382,7 +382,7 @@ program multisig_core.aleo {
     // @param wallet_id The wallet id the signing operation belongs to
     // @param signing_op_id The signing operation id
     fn sign(public wallet_id: address, public signing_op_id: field) -> Final {
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
         return final { finalize_sign(wallet_id, signing_op_id, signer_hash, 0u32); };
     }
@@ -398,7 +398,7 @@ program multisig_core.aleo {
         public signing_op_id: field,
         public round: u32,
     ) -> Final {
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
         return final { finalize_sign(wallet_id, signing_op_id, signer_hash, round); };
     }
@@ -474,7 +474,7 @@ program multisig_core.aleo {
         let wallet_signing_op_id_hash = BHP256::hash_to_field(
             WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
         );
-        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: self.signer };
+        let signer = WalletAleoSigner { wallet_id: wallet_id, aleo_signer: std::ctx::signer() };
         let signer_hash = BHP256::hash_to_field(signer);
         return (
             wallet_signing_op_id_hash,
@@ -631,10 +631,10 @@ final fn finalize_initiate_signing_op(
     }
     // Get existing pending signing op
     let existing_pending_op = pending_signing_ops.get(wallet_signing_op_id_hash);
-    assert(signing_op_expired(existing_pending_op, block.height));
+    assert(signing_op_expired(existing_pending_op, std::ctx::block_height()));
 
     let block_expiration_or_zero = (block_expiration == MAX_BLOCK_HEIGHT) ? 0u32 : block_expiration;
-    let expires_at_block = (block_expiration == MAX_BLOCK_HEIGHT) ? MAX_BLOCK_HEIGHT : block.height
+    let expires_at_block = (block_expiration == MAX_BLOCK_HEIGHT) ? MAX_BLOCK_HEIGHT : std::ctx::block_height()
         + block_expiration_or_zero;
     let round = existing_pending_op.round + 1;
 
@@ -643,7 +643,7 @@ final fn finalize_initiate_signing_op(
         // Store the new pending signing op
         pending_signing_ops.set(wallet_signing_op_id_hash, WalletSigningOp {
             confirmations: 1,
-            initiated_at_block: block.height,
+            initiated_at_block: std::ctx::block_height(),
             expires_at_block: expires_at_block,
             round: round,
         });
@@ -659,13 +659,13 @@ final fn finalize_initiate_signing_op(
         // Mark complete if possible
         let wallet_settings = wallets_map.get(wallet_id);
         if 1 >= wallet_settings.threshold {
-            completed_signing_ops.set(wallet_signing_op_id_hash, block.height);
+            completed_signing_ops.set(wallet_signing_op_id_hash, std::ctx::block_height());
             // NOTE: We never remove from pending_signing_ops to ensure wallet_signing_op_id_hash is always unique
         }
     } else {
         pending_signing_ops.set(wallet_signing_op_id_hash, WalletSigningOp {
             confirmations: 0,
-            initiated_at_block: block.height,
+            initiated_at_block: std::ctx::block_height(),
             expires_at_block: expires_at_block,
             round: round,
         });
@@ -703,7 +703,7 @@ final fn finalize_sign(wallet_id: address, signing_op_id: field, signer_hash: fi
     assert(pending_signing_ops.contains(wallet_signing_op_id_hash));
 
     let signing_op = pending_signing_ops.get(wallet_signing_op_id_hash);
-    assert(!signing_op_expired(signing_op, block.height));
+    assert(!signing_op_expired(signing_op, std::ctx::block_height()));
 
     // Round must match if it is not 0
     assert(round == 0u32 || round == signing_op.round);
@@ -735,7 +735,7 @@ final fn finalize_sign(wallet_id: address, signing_op_id: field, signer_hash: fi
     // While storing the threshold upon initiation is trivial, capturing a snapshot of the signer
     // set is difficult, so we just use the current settings.
     if new_signing_op.confirmations >= wallet_settings.threshold {
-        completed_signing_ops.set(wallet_signing_op_id_hash, block.height);
+        completed_signing_ops.set(wallet_signing_op_id_hash, std::ctx::block_height());
     }
     // NOTE: We never remove from pending_signing_ops to ensure wallet_signing_op_id_hash is always unique
 }
@@ -776,7 +776,7 @@ final fn finalize_sign_ecdsa(
     assert(pending_signing_ops.contains(wallet_signing_op_id_hash));
 
     let signing_op = pending_signing_ops.get(wallet_signing_op_id_hash);
-    assert(!signing_op_expired(signing_op, block.height));
+    assert(!signing_op_expired(signing_op, std::ctx::block_height()));
 
     // Round must match if it is not 0
     assert(round == 0u32 || round == signing_op.round);
@@ -820,7 +820,7 @@ final fn finalize_sign_ecdsa(
     // While storing the threshold upon initiation is trivial, capturing a snapshot of the signer
     // set is difficult, so we just use the current settings.
     if new_signing_op.confirmations >= wallet_settings.threshold {
-        completed_signing_ops.set(wallet_signing_op_id_hash, block.height);
+        completed_signing_ops.set(wallet_signing_op_id_hash, std::ctx::block_height());
     }
     // NOTE: We never remove from pending_signing_ops to ensure wallet_signing_op_id_hash is always unique
 }
@@ -887,7 +887,7 @@ fn signing_op_expired(signing_op: WalletSigningOp, block_height: u32) -> bool {
 // @notice Get the hash of a WalletSigningOpId
 // @param wallet_id The wallet ID
 // @param signing_op_id The signing op ID
-fn get_signing_op_id_hash_fn(wallet_id: address, signing_op_id: field) -> field {
+export fn get_signing_op_id_hash_fn(wallet_id: address, signing_op_id: field) -> field {
     return BHP256::hash_to_field(
         WalletSigningOpId { wallet_id: wallet_id, signing_op_id: signing_op_id },
     );
