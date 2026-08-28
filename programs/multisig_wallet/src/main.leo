@@ -98,7 +98,7 @@ program multisig_wallet.aleo {
             );
         assert_eq(wallet_signing_op_id_hash, final_wallet_op_hash);
         return (
-            wallet_signing_op_id_hash,
+            final_wallet_op_hash,
             final {
                 let balance_key_hash: field = BHP256::hash_to_field(
                     BalanceKey { wallet_id: wallet_id, token_id: transfer.token_id },
@@ -266,7 +266,7 @@ program multisig_wallet.aleo {
         let details_hash = BHP256::hash_to_field(details);
         let execute_record = ExecutePrivateTransfer { owner: std::ctx::signer(), details: details };
         return (
-            wallet_signing_op_id_hash,
+            final_wallet_op_hash,
             execute_record,
             final {
                 // NOTE: For simplicity's sake we do not check the current balance. The balance gets verified during the execution phase.
